@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 tf.reset_default_graph()
 
 
@@ -89,32 +90,32 @@ def test(x_test):
         plt.plot(data)
         plt.show()
 
-        # print("k is ok")
-        # k_temp = np.zeros([8,8])
-        # plt.ion()
-        # for i in range(batch_num):
-        #     #k_temp = np.zeros([8, 8])
-        #     plt.cla()
-        #     k_temp[k_index[i]//8, k_index[i]%8] = 1
-        #     plt.imshow(k_temp, cmap="RdYlBu", vmin=0, vmax=1)
-        #     # plt.colorbar()
-        #     plt.pause(0.1)
-        # plt.ioff()
-        # plt.show()
+
+        print("k is ok")
+        fig = plt.figure()
+        ims = []
+        for i in range(batch_num):
+            k_temp = np.zeros([8, 8])
+            k_temp[k_index[i]//8, k_index[i]%8] = 1
+            ims.append([plt.imshow(k_temp, cmap="RdYlBu", vmin=0, vmax=1)])
+        ani = animation.ArtistAnimation(fig, ims, interval=200, repeat_delay=1000)
+        print('ok')
+        plt.show()
+        # ani.save("test.mp4", writer='imagemagick')
 
 
 seq_len = 128
 step = 8
 z_dim = 16
-epochs = 5000
+epochs = 100
 batch_size = 64
 learning_rate = 0.001
 decay_factor = 0.9
 # data1 = [np.sin(np.pi*i*0.03125) for i in range(5000)]
-# data2 = [np.sin(np.pi*i*0.04) for i in range(10000)]
-# data = data2
-data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
-data = [(i-np.min(data))/(np.max(data)-np.min(data)) for i in data]
+data2 = [np.sin(np.pi*i*0.04) for i in range(10000)]
+data = data2
+# data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
+# data = [(i-np.min(data))/(np.max(data)-np.min(data)) for i in data]
 x_train, y_train = get_train_data(data, seq_len, step)
 x_train = np.reshape(x_train,[x_train.shape[0], 1, x_train.shape[1]])
 print("ok")

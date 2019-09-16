@@ -104,7 +104,7 @@ def test(x_test):
 seq_len = 128
 step = 8
 z_dim = 16
-epochs = 400
+epochs = 1
 batch_size = 32
 decay_factor = 0.9
 # data1 = [np.sin(np.pi*i*0.03125) for i in range(5000)]
@@ -117,8 +117,8 @@ x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")
 # data = [(i-np.mean(data)/np.std(data)) for i in data]
 print(x_train.shape)
-# model = VAE(z_dim=z_dim, seq_len=seq_len, input_dim=1)
-# loss = train(model, x_train, epochs, batch_size)
-# plt.plot(loss)
-# plt.show()
+model = VAE(z_dim=z_dim, seq_len=seq_len, input_dim=1)
+loss = train(model, x_train, epochs, batch_size)
+plt.plot(loss)
+plt.show()
 test(x_train)

@@ -56,23 +56,6 @@ def test(x_test):
         graph = tf.get_default_graph()
         input_x = graph.get_tensor_by_name("input_x:0")
         x_hat_e = graph.get_tensor_by_name("decoder_ze/result:0")
-        # embeddings = graph.get_tensor_by_name("embeddings:0")
-        # k_ = graph.get_tensor_by_name("k:0")
-
-        # plt.ion()
-        # for i in range(batch_num):
-        #     plt.cla()
-        #     embedding = sess.run(embeddings, feed_dict={input_x: x_test[i:i+1]})
-        #     print(type(embedding))
-        #     print(np.shape(embedding))
-        #     temp = np.reshape(embedding, [8, 8])
-        #     plt.imshow(temp, cmap="RdYlBu", vmin=0, vmax=1)
-        #     # plt.colorbar()
-        #     plt.pause(0.1)
-        # plt.ioff()
-        # plt.show()
-        # if i == 0:
-        #     break
 
         for i in range(batch_num):
             x_hat_e = sess.run(x_hat_e, feed_dict={input_x: x_test[i:i + 1]})
@@ -85,33 +68,6 @@ def test(x_test):
                 break
 
 
-
-        # k_index = []
-        # for i in range(batch_num):
-        #     k = sess.run(k_, feed_dict={input_x: x_test[i:i + 1]})
-        #     # print(type(k))
-        #     k_index.extend(k)
-        # print(len(pd.value_counts(k_index)))
-        # print(pd.value_counts(k_index))
-        # plt.subplot(2, 1, 1)
-        # plt.plot(k_index)
-        # plt.subplot(2, 1, 2)
-        # plt.plot(data)
-        # plt.show()
-        #
-        # print("k is ok")
-        # fig = plt.figure()
-        # ims = []
-        # for i in range(batch_num):
-        #     k_temp = np.zeros([8, 8])
-        #     k_temp[k_index[i] // 8, k_index[i] % 8] = 1
-        #     ims.append([plt.imshow(k_temp, cmap="Greys", vmin=0, vmax=1)])
-        # ani = animation.ArtistAnimation(fig, ims, interval=200, repeat_delay=1000)
-        # print('ok')
-        # plt.show()
-        # ani.save("test.mp4", writer='imagemagick')
-
-
 seq_len = 128
 step = 8
 z_dim = 16
@@ -121,8 +77,8 @@ decay_factor = 0.9
 # data1 = [np.sin(np.pi*i*0.03125) for i in range(5000)]
 data2 = [np.sin(np.pi * i * 0.04)+0.1*np.random.random() for i in range(10000)]
 data = data2
-# data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
-# data = [(i-np.min(data))/(np.max(data)-np.min(data)) for i in data]
+data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
+data = [(i-np.min(data))/(np.max(data)-np.min(data)) for i in data]
 x_train, y_train = get_train_data(data, seq_len, step)
 x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")

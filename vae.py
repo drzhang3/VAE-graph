@@ -3,7 +3,7 @@ from tensorflow.python.layers.core import dense
 
 
 class VAE():
-    def __init__(self,z_dim, seq_len, input_dim):
+    def __init__(self, z_dim, seq_len, input_dim):
         self.z_dim = z_dim
         self.seq_len = seq_len
         self.input_dim = input_dim
@@ -56,12 +56,13 @@ class VAE():
             probabilities_positive = tf.exp(probabilities_raw)
             probabilities_summed = tf.reduce_sum(probabilities_positive, axis=[-1,-2], keepdims=True)
             probabilities_normalized = probabilities_positive / probabilities_summed
-            return probabilities_normalized
+            return probabilities_normalized         # (8,8,8,8)
 
     def z_dist_flat(self):
         z_dist = tf.squared_difference(tf.expand_dims(tf.expand_dims(self.z_e, 1), 1), tf.expand_dims(self.embeddings, 0))
-        z_dist_red = tf.reduce_sum(z_dist, axis=-1)
-        z_dist_flat = tf.reshape(z_dist_red, [self.batch_size, -1])
+        # (batch_size, 8, 8, z_dim)
+        z_dist_red = tf.reduce_sum(z_dist, axis=-1)    # (batch_size, 8, 8)
+        z_dist_flat = tf.reshape(z_dist_red, [self.batch_size, -1])     # (batch_size, 64)
         return z_dist_flat
 
     def z_q(self):
@@ -101,7 +102,7 @@ class VAE():
         return z_q_neighbors
 
     def k(self):
-        k = tf.argmax(-self.z_dist_flat(), axis=-1, name="k")
+        k = tf.argmax(-self.z_dist_flat(), axis=-1, name="k")     # (batch_size,)
         tf.summary.histogram("clusters", k)
         return k
 
@@ -143,8 +144,8 @@ class VAE():
         k_2 = self.k % self.som_dim[1]
         k_1_old = tf.concat([k_1[0:1], k_1[:-1]], axis=0)
         k_2_old = tf.concat([k_2[0:1], k_2[:-1]], axis=0)
-        k_stacked = tf.stack([k_1_old, k_2_old, k_1, k_2], axis=1)
-        transitions_all = tf.gather_nd(self.transition_probabilities, k_stacked)
+        k_stacked = tf.stack([k_1_old, k_2_old, k_1, k_2], axis=1)         # (batch_size, 4)
+        transitions_all = tf.gather_nd(self.transition_probabilities, k_stacked)    # (batch_size, )
         loss_probabilities = - tf.reduce_mean(tf.log(transitions_all))
         return loss_probabilities
 
@@ -166,13 +167,13 @@ class VAE():
             # loss_rec = tf.losses.mean_squared_error(self.input_x, self.x_hat)
             loss_kl = - 0.5 * tf.reduce_sum(1-tf.square(self.mu)-self.sigma_2+tf.log(self.sigma_2))
             #loss = self.loss_reconstruction() + loss_kl
-            loss = self.loss_reconstruction()+self.loss_commitment()+self.loss_som()+\
-                 self.loss_probabilities() + self.loss_z_prob()
+            loss = self.loss_reconstruction()+1.0*self.loss_commitment()+0.9*self.loss_som()+\
+                 1.8*self.loss_probabilities() + 1.4*self.loss_z_prob()
             return loss
 
     def optimize(self):
         with tf.variable_scope("optimize"):
-            starter_learning_rate = 0.001
+            starter_learning_rate = 0.0005
             learning_rate = tf.train.exponential_decay(starter_learning_rate, self.global_step,
                                                 200, 0.9, staircase=True)
             optimizer = tf.train.AdamOptimizer(learning_rate)

@@ -5,7 +5,15 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from sklearn.metrics import r2_score,mean_squared_error,mean_absolute_error,median_absolute_error
 tf.reset_default_graph()
+
+
+def evaluation(x, y):
+    r2 = r2_score(x, y)
+    mse = mean_squared_error(x, y)
+    print("The r2 is %f"%r2)
+    print("The mse if %f"%mse)
 
 
 def shuffle_data(x_train):
@@ -48,8 +56,8 @@ def test(x_test):
         graph = tf.get_default_graph()
         input_x = graph.get_tensor_by_name("input_x:0")
         x_hat_e = graph.get_tensor_by_name("decoder_ze/result:0")
-        embeddings = graph.get_tensor_by_name("embeddings:0")
-        k_ = graph.get_tensor_by_name("k:0")
+        # embeddings = graph.get_tensor_by_name("embeddings:0")
+        # k_ = graph.get_tensor_by_name("k:0")
 
         # plt.ion()
         # for i in range(batch_num):
@@ -69,35 +77,38 @@ def test(x_test):
         for i in range(batch_num):
             x_hat_e = sess.run(x_hat_e, feed_dict={input_x: x_test[i:i + 1]})
             # print(np.shape(x_test[0:1][0,0,:]))
-            plt.plot(x_hat_e[0, 0, :])
-            plt.plot(x_test[0:1][0, 0, :])
-            plt.show()
+            evaluation(x_hat_e[0, 0, :], x_test[0:1][0, 0, :])
+            # plt.plot(x_hat_e[0, 0, :])
+            # plt.plot(x_test[0:1][0, 0, :])
+            # plt.show()
             if i == 0:
                 break
 
-        k_index = []
-        for i in range(batch_num):
-            k = sess.run(k_, feed_dict={input_x: x_test[i:i + 1]})
-            # print(type(k))
-            k_index.extend(k)
-        print(len(pd.value_counts(k_index)))
-        print(pd.value_counts(k_index))
-        plt.subplot(2, 1, 1)
-        plt.plot(k_index)
-        plt.subplot(2, 1, 2)
-        plt.plot(data)
-        plt.show()
 
-        print("k is ok")
-        fig = plt.figure()
-        ims = []
-        for i in range(batch_num):
-            k_temp = np.zeros([8, 8])
-            k_temp[k_index[i] // 8, k_index[i] % 8] = 1
-            ims.append([plt.imshow(k_temp, cmap="Greys", vmin=0, vmax=1)])
-        ani = animation.ArtistAnimation(fig, ims, interval=200, repeat_delay=1000)
-        print('ok')
-        plt.show()
+
+        # k_index = []
+        # for i in range(batch_num):
+        #     k = sess.run(k_, feed_dict={input_x: x_test[i:i + 1]})
+        #     # print(type(k))
+        #     k_index.extend(k)
+        # print(len(pd.value_counts(k_index)))
+        # print(pd.value_counts(k_index))
+        # plt.subplot(2, 1, 1)
+        # plt.plot(k_index)
+        # plt.subplot(2, 1, 2)
+        # plt.plot(data)
+        # plt.show()
+        #
+        # print("k is ok")
+        # fig = plt.figure()
+        # ims = []
+        # for i in range(batch_num):
+        #     k_temp = np.zeros([8, 8])
+        #     k_temp[k_index[i] // 8, k_index[i] % 8] = 1
+        #     ims.append([plt.imshow(k_temp, cmap="Greys", vmin=0, vmax=1)])
+        # ani = animation.ArtistAnimation(fig, ims, interval=200, repeat_delay=1000)
+        # print('ok')
+        # plt.show()
         # ani.save("test.mp4", writer='imagemagick')
 
 
@@ -117,8 +128,8 @@ x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")
 # data = [(i-np.mean(data)/np.std(data)) for i in data]
 print(x_train.shape)
-# model = VAE(z_dim=z_dim, seq_len=seq_len, input_dim=1)
-# loss = train(model, x_train, epochs, batch_size)
-# plt.plot(loss)
-# plt.show()
+model = VAE(z_dim=z_dim, seq_len=seq_len, input_dim=1)
+loss = train(model, x_train, epochs, batch_size)
+plt.plot(loss)
+plt.show()
 test(x_train)

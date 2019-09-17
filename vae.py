@@ -30,7 +30,7 @@ class VAE():
             sigma = tf.sqrt(sigma_2)
             epsilon = tf.random_normal(shape=tf.shape(sigma))
             z_e = mu + sigma * epsilon
-            return mu, mu, tf.square(sigma)
+            return z_e, mu, tf.square(sigma)
             # return z_e
 
     def decoder_ze(self):

@@ -38,9 +38,8 @@ def train(model, x_train, epochs, batch_size):
             for j in range(batch_num):
                 _, loss_ = sess.run([model.train_op, model.loss],
                                     feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
-
-                # print('Epoch: ', epoch + 1, '| Batch: ', j + 1, '| Loss: ', loss_)
                 temp_loss.append(loss_)
+            print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
             loss_list.append(np.mean(temp_loss))
         saver.save(sess, 'models\ckp')
         summaries = tf.summary.merge_all()
@@ -61,22 +60,23 @@ def test(x_test):
             x_hat_e = sess.run(x_hat_e, feed_dict={input_x: x_test[i:i + 1]})
             # print(np.shape(x_test[0:1][0,0,:]))
             evaluation(x_hat_e[0, 0, :], x_test[0:1][0, 0, :])
-            # plt.plot(x_hat_e[0, 0, :])
-            # plt.plot(x_test[0:1][0, 0, :])
-            # plt.show()
+            plt.plot(x_hat_e[0, 0, :], label='reconstruction')
+            plt.plot(x_test[0:1][0, 0, :], label = "raw data")
+            plt.legend(labels=['reconstruction', 'raw data'], loc='best')
+            plt.show()
             if i == 0:
                 break
 
 
-seq_len = 128
-step = 8
-z_dim = 16
+seq_len = 256
+step = 4
+z_dim = 32
 epochs = 400
 batch_size = 32
 decay_factor = 0.9
 # data1 = [np.sin(np.pi*i*0.03125) for i in range(5000)]
-data2 = [np.sin(np.pi * i * 0.04)+0.1*np.random.random() for i in range(10000)]
-data = data2
+# data2 = [np.sin(np.pi * i * 0.04)+0.01*np.random.random() for i in range(10000)]
+# data = data2
 data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
 data = [(i-np.min(data))/(np.max(data)-np.min(data)) for i in data]
 x_train, y_train = get_train_data(data, seq_len, step)

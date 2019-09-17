@@ -66,7 +66,7 @@ def test(x_test):
         #     break
 
         for i in range(batch_num):
-            x_hat_e = sess.run(x_hat_e, feed_dict={input_x: x_test[i:i + 1]})
+            x_hat_e = sess.run(x_hat_e, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
             # print(np.shape(x_test[0:1][0,0,:]))
             plt.plot(x_hat_e[0, 0, :])
             plt.plot(x_test[0:1][0, 0, :])
@@ -75,9 +75,8 @@ def test(x_test):
                 break
 
         k_index = []
-        for i in range(batch_num):
-            k = sess.run(k_, feed_dict={input_x: x_test[i:i + 1]})
-            # print(type(k))
+        for i in range(batch_num//batch_size):
+            k = sess.run(k_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
             k_index.extend(k)
         print(len(pd.value_counts(k_index)))
         print(pd.value_counts(k_index))
@@ -100,18 +99,18 @@ def test(x_test):
         # ani.save("test.mp4", writer='imagemagick')
 
 
-seq_len = 128
-step = 8
-z_dim = 16     # VAE hidden_state size
+seq_len = 256
+step = 4
+z_dim = 32     # VAE hidden_state size
 hidden_dim = 12     # LSTM cell state size
-epochs = 500
+epochs = 1000
 batch_size = 32
 decay_factor = 0.9
 # data1 = [np.sin(np.pi*i*0.03125) for i in range(5000)]
-data2 = [np.sin(np.pi * i * 0.04)+0.1*np.random.random() for i in range(10000)]
-data = data2
-# data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
-# data = [(i-np.min(data))/(np.max(data)-np.min(data)) for i in data]
+# data2 = [np.sin(np.pi * i * 0.04)+0.01*np.random.random() for i in range(10000)]
+# data = data2
+data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
+data = [(i-np.min(data))/(np.max(data)-np.min(data)) for i in data]
 x_train, y_train = get_train_data(data, seq_len, step)
 x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")

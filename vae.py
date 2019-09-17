@@ -16,6 +16,7 @@ class VAE():
         self.embeddings = self.embeddings()
         self.transition_probabilities = self.transition_probabilities()
         self.z_e, self.mu, self.sigma_2 = self.encoder()
+        self.z_graph = self.z_e
         self.z_e_old = self.z_e_old()
         self.k = self.k()
         self.z_q = self.z_q()
@@ -130,6 +131,19 @@ class VAE():
         outputs = dense(outputs, self.z_dim)     # (1, hidden_dim)
         return outputs
 
+    def _graph(self):
+        conv_num = 2
+        node_num = 32
+        node_dim = self.z_dim
+        node_state = self.z_e       # (node_num, node_dim)
+        init_prob = tf.get_variable("prob", [node_num, node_num],
+                                initializer=tf.truncated_normal_initializer(stddev=0.05))
+        weight = tf.Variable(tf.random_normal([node_dim, node_dim], stddev=0.35), dtype=tf.float32)
+        print(weight.get_shape())
+        H_1 = tf.nn.sigmoid(tf.matmul(tf.matmul(init_prob, node_state), weight))
+        H_2 = tf.nn.sigmoid(tf.matmul(tf.matmul(init_prob, H_1), weight))    # (node_num, node_dim)
+        return H_2    # (batch_size, z_dim)
+
     def z_loss(self):
         return tf.losses.mean_squared_error(self.z_e[-1:], self.lstm_vae())
 
@@ -180,8 +194,8 @@ class VAE():
             # loss_rec = tf.losses.mean_squared_error(self.input_x, self.x_hat)
             loss_kl = - 0.5 * tf.reduce_sum(1-tf.square(self.mu)-self.sigma_2+tf.log(self.sigma_2))
             #loss = self.loss_reconstruction() + loss_kl
-            loss = self.loss_reconstruction()+1.0*self.loss_commitment()+0.9*self.loss_som()+\
-                 1.8*self.loss_probabilities() + 1.4*self.loss_z_prob() + self.z_loss()
+            loss = self.loss_reconstruction()+self.loss_commitment()+self.loss_som()+\
+                 self.loss_probabilities() + self.loss_z_prob()
             return loss
 
     def optimize(self):

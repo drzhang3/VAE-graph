@@ -132,7 +132,6 @@ class VAE():
         return outputs
 
     def _graph(self):
-        conv_num = 2
         node_num = 32
         node_dim = self.z_dim
         node_state = self.z_e       # (node_num, node_dim)

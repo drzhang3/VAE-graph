@@ -3,10 +3,11 @@ from tensorflow.python.layers.core import dense
 
 
 class VAE():
-    def __init__(self, z_dim, seq_len, input_dim):
+    def __init__(self, z_dim, seq_len, input_dim, hidden_dim):
         self.z_dim = z_dim
         self.seq_len = seq_len
         self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
         self.input_x = tf.placeholder(shape=[None, input_dim, seq_len], dtype=tf.float32, name="input_x")
         self.global_step = tf.Variable(0, trainable=False, name="global_step")
         self.decay_steps = 500
@@ -120,6 +121,18 @@ class VAE():
             x_hat = tf.expand_dims(x_hat, 1, name='result')
             return x_hat
 
+    def lstm_vae(self):
+        cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_dim)
+        input_lstm = tf.expand_dims(self.z_e[:-1], 0, name="input_lstm")
+        # cell = tf.contrib.rnn.AttentionCellWrapper(cell, attn_length = self.attention_len)
+        outputs, _ = tf.nn.dynamic_rnn(cell, input_lstm, dtype=tf.float32)    # (batch_size, seq_len, z_dim)
+        outputs = tf.transpose(outputs, [1, 0, 2])[-1]     # (1 , z_dim)
+        outputs = dense(outputs, self.z_dim)     # (1, hidden_dim)
+        return outputs
+
+    def z_loss(self):
+        return tf.losses.mean_squared_error(self.z_e[-1:], self.lstm_vae())
+
     def loss_reconstruction(self):
         loss_rec_mse_zq = tf.losses.mean_squared_error(self.input_x, self.x_hat_q)
         loss_rec_mse_ze = tf.losses.mean_squared_error(self.input_x, self.x_hat_e)
@@ -168,7 +181,7 @@ class VAE():
             loss_kl = - 0.5 * tf.reduce_sum(1-tf.square(self.mu)-self.sigma_2+tf.log(self.sigma_2))
             #loss = self.loss_reconstruction() + loss_kl
             loss = self.loss_reconstruction()+1.0*self.loss_commitment()+0.9*self.loss_som()+\
-                 1.8*self.loss_probabilities() + 1.4*self.loss_z_prob()
+                 1.8*self.loss_probabilities() + 1.4*self.loss_z_prob() + self.z_loss()
             return loss
 
     def optimize(self):

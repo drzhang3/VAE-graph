@@ -30,9 +30,8 @@ def train(model, x_train, epochs, batch_size):
             for j in range(batch_num):
                 _, loss_ = sess.run([model.train_op, model.loss],
                                     feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
-
-                # print('Epoch: ', epoch + 1, '| Batch: ', j + 1, '| Loss: ', loss_)
                 temp_loss.append(loss_)
+            print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
             loss_list.append(np.mean(temp_loss))
         saver.save(sess, 'models\ckp')
         summaries = tf.summary.merge_all()
@@ -88,23 +87,24 @@ def test(x_test):
         plt.plot(data)
         plt.show()
 
-        print("k is ok")
-        fig = plt.figure()
-        ims = []
-        for i in range(batch_num):
-            k_temp = np.zeros([8, 8])
-            k_temp[k_index[i] // 8, k_index[i] % 8] = 1
-            ims.append([plt.imshow(k_temp, cmap="Greys", vmin=0, vmax=1)])
-        ani = animation.ArtistAnimation(fig, ims, interval=200, repeat_delay=1000)
-        print('ok')
-        plt.show()
+        # print("k is ok")
+        # fig = plt.figure()
+        # ims = []
+        # for i in range(batch_num):
+        #     k_temp = np.zeros([8, 8])
+        #     k_temp[k_index[i] // 8, k_index[i] % 8] = 1
+        #     ims.append([plt.imshow(k_temp, cmap="Greys", vmin=0, vmax=1)])
+        # ani = animation.ArtistAnimation(fig, ims, interval=200, repeat_delay=1000)
+        # print('ok')
+        # plt.show()
         # ani.save("test.mp4", writer='imagemagick')
 
 
 seq_len = 128
 step = 8
-z_dim = 16
-epochs = 1
+z_dim = 16     # VAE hidden_state size
+hidden_dim = 12     # LSTM cell state size
+epochs = 500
 batch_size = 32
 decay_factor = 0.9
 # data1 = [np.sin(np.pi*i*0.03125) for i in range(5000)]
@@ -117,7 +117,7 @@ x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")
 # data = [(i-np.mean(data)/np.std(data)) for i in data]
 print(x_train.shape)
-model = VAE(z_dim=z_dim, seq_len=seq_len, input_dim=1)
+model = VAE(z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim)
 loss = train(model, x_train, epochs, batch_size)
 plt.plot(loss)
 plt.show()

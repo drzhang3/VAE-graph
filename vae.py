@@ -1,6 +1,20 @@
 import tensorflow as tf
 from tensorflow.python.layers.core import dense
+import numpy as np
 
+
+def z_loss(x, y):
+    return tf.losses.mean_squared_error(x, y)
+
+def compute_similarity(node1, node2):
+    return tf.multiply(node1, node2)/(tf.reduce_sum(node1), tf.reduce_sum(node2))
+
+def node_similarity(node_num, node_state):
+    similarity = np.zeros([node_num, node_num])
+    for i in range(node_num):
+        for j in range(node_num):
+            similarity[i][j] = compute_similarity(node_state[i], node_state[j])
+    return similarity
 
 class VAE():
     def __init__(self, z_dim, seq_len, input_dim, hidden_dim):
@@ -8,7 +22,7 @@ class VAE():
         self.seq_len = seq_len
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.input_x = tf.placeholder(shape=[None, input_dim, seq_len], dtype=tf.float32, name="input_x")
+        self.input_x = tf.placeholder(shape=[32, input_dim, seq_len], dtype=tf.float32, name="input_x")
         self.global_step = tf.Variable(0, trainable=False, name="global_step")
         self.decay_steps = 500
         self.batch_size = tf.shape(self.input_x)[0]
@@ -16,7 +30,8 @@ class VAE():
         self.embeddings = self.embeddings()
         self.transition_probabilities = self.transition_probabilities()
         self.z_e, self.mu, self.sigma_2 = self.encoder()
-        self.z_graph = self.z_e
+        self.z_e_x, self.z_e_y = self.get_z_e(self.z_e)
+        # self.z_graph = self.z_e
         self.z_e_old = self.z_e_old()
         self.k = self.k()
         self.z_q = self.z_q()
@@ -122,34 +137,61 @@ class VAE():
             x_hat = tf.expand_dims(x_hat, 1, name='result')
             return x_hat
 
-    def lstm_vae(self):
-        cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_dim)
-        input_lstm = tf.expand_dims(self.z_e[:-1], 0, name="input_lstm")
-        # cell = tf.contrib.rnn.AttentionCellWrapper(cell, attn_length = self.attention_len)
-        outputs, _ = tf.nn.dynamic_rnn(cell, input_lstm, dtype=tf.float32)    # (batch_size, seq_len, z_dim)
-        outputs = tf.transpose(outputs, [1, 0, 2])[-1]     # (1 , z_dim)
-        outputs = dense(outputs, self.z_dim)     # (1, hidden_dim)
+    def get_z_e(self, value, seq_len=12, step=1):
+        z_e_x = []
+        z_e_y = []
+        for i in range(0, value.shape[0] - seq_len, step):
+            x = value[i:i + seq_len + 1]
+            y = value[i:i + seq_len + 1]
+            z_e_x.append(x[:-1])
+            z_e_y.append(y[-1])
+        return z_e_x, z_e_y
+
+    def run_lstm_ze(self):
+        loss = []
+        for i in range(5):
+            outputs = self.lstm_vae(self.z_e_x[i])
+            loss.append(z_loss(outputs, self.z_e_y[i]))
+        return tf.reduce_mean(loss)
+
+    def lstm_vae(self, x_data):
+        with tf.variable_scope('lstm_vae', reuse=tf.AUTO_REUSE):
+            cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_dim)
+            input_lstm = tf.expand_dims(x_data, 0, name="input_lstm")
+            # cell = tf.contrib.rnn.AttentionCellWrapper(cell, attn_length = self.attention_len)
+            outputs, _ = tf.nn.dynamic_rnn(cell, input_lstm, dtype=tf.float32)    # (batch_size, seq_len, z_dim)
+            outputs = tf.transpose(outputs, [1, 0, 2])[-1]     # (1 , z_dim)
+            outputs = dense(outputs, self.z_dim)     # (1, hidden_dim)
+            outputs =tf.reshape(outputs, [self.z_dim])
         return outputs
 
     def _graph(self):
+        max_iteration = 5
         node_num = 32
         node_dim = self.z_dim
         node_state = self.z_e       # (node_num, node_dim)
         init_prob = tf.get_variable("prob", [node_num, node_num],
                                 initializer=tf.truncated_normal_initializer(stddev=0.05))
         weight = tf.Variable(tf.random_normal([node_dim, node_dim], stddev=0.35), dtype=tf.float32)
+        learning_matrix = tf.Variable(tf.random_normal([node_dim, node_num], stddev=0.35), dtype=tf.float32)
         print(weight.get_shape())
+        # GCN  first stage
         H_1 = tf.nn.sigmoid(tf.matmul(tf.matmul(init_prob, node_state), weight))
         H_2 = tf.nn.sigmoid(tf.matmul(tf.matmul(init_prob, H_1), weight))    # (node_num, node_dim)
-        return H_2    # (batch_size, z_dim)
+        # return H_2  # (batch_size, z_dim)
 
-    def z_loss(self):
-        return tf.losses.mean_squared_error(self.z_e[-1:], self.lstm_vae())
+        # GNN  second stage
+        weight_adj = tf.Variable(tf.random_normal([node_num, node_num], stddev=0.35), dtype=tf.float32)
+        similarity = node_similarity(node_num, node_state)     # (node_num, node_num)
+        P_0 = weight_adj
+        for i in range(max_iteration):
+            P_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(tf.matmul(P_0, similarity), node_state)), learning_matrix)
+        return P_0
 
     def loss_reconstruction(self):
         loss_rec_mse_zq = tf.losses.mean_squared_error(self.input_x, self.x_hat_q)
         loss_rec_mse_ze = tf.losses.mean_squared_error(self.input_x, self.x_hat_e)
-        loss_rec_mse = loss_rec_mse_ze + loss_rec_mse_zq
+        loss_rec_mse = loss_rec_mse_ze
         tf.summary.scalar("loss_reconstruction", loss_rec_mse)
         return loss_rec_mse_ze
 
@@ -193,8 +235,9 @@ class VAE():
             # loss_rec = tf.losses.mean_squared_error(self.input_x, self.x_hat)
             loss_kl = - 0.5 * tf.reduce_sum(1-tf.square(self.mu)-self.sigma_2+tf.log(self.sigma_2))
             #loss = self.loss_reconstruction() + loss_kl
-            loss = self.loss_reconstruction()+self.loss_commitment()+self.loss_som()+\
-                 self.loss_probabilities() + self.loss_z_prob()
+            # loss = self.loss_reconstruction()+self.loss_commitment()+self.loss_som()+\
+            #      self.loss_probabilities() + self.loss_z_prob()
+            loss = self.loss_reconstruction()+self.run_lstm_ze()
             return loss
 
     def optimize(self):

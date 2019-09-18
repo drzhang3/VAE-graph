@@ -22,7 +22,7 @@ class VAE():
         self.seq_len = seq_len
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.input_x = tf.placeholder(shape=[32, input_dim, seq_len], dtype=tf.float32, name="input_x")
+        self.input_x = tf.placeholder(shape=[8, input_dim, seq_len], dtype=tf.float32, name="input_x")
         self.global_step = tf.Variable(0, trainable=False, name="global_step")
         self.decay_steps = 500
         self.batch_size = tf.shape(self.input_x)[0]
@@ -31,7 +31,7 @@ class VAE():
         self.transition_probabilities = self.transition_probabilities()
         self.z_e, self.mu, self.sigma_2 = self.encoder()
         self.z_e_x, self.z_e_y = self.get_z_e(self.z_e)
-        # self.z_graph = self.z_e
+        self.z_graph, self.init_prob = self._graph()
         self.z_e_old = self.z_e_old()
         self.k = self.k()
         self.z_q = self.z_q()
@@ -137,7 +137,7 @@ class VAE():
             x_hat = tf.expand_dims(x_hat, 1, name='result')
             return x_hat
 
-    def get_z_e(self, value, seq_len=12, step=1):
+    def get_z_e(self, value, seq_len=3, step=1):
         z_e_x = []
         z_e_y = []
         for i in range(0, value.shape[0] - seq_len, step):
@@ -167,26 +167,29 @@ class VAE():
 
     def _graph(self):
         max_iteration = 5
-        node_num = 32
+        node_num = 8
         node_dim = self.z_dim
         node_state = self.z_e       # (node_num, node_dim)
         init_prob = tf.get_variable("prob", [node_num, node_num],
-                                initializer=tf.truncated_normal_initializer(stddev=0.05))
+                                    initializer=tf.truncated_normal_initializer(stddev=0.05))
         weight = tf.Variable(tf.random_normal([node_dim, node_dim], stddev=0.35), dtype=tf.float32)
         learning_matrix = tf.Variable(tf.random_normal([node_dim, node_num], stddev=0.35), dtype=tf.float32)
         print(weight.get_shape())
         # GCN  first stage
-        H_1 = tf.nn.sigmoid(tf.matmul(tf.matmul(init_prob, node_state), weight))
-        H_2 = tf.nn.sigmoid(tf.matmul(tf.matmul(init_prob, H_1), weight))    # (node_num, node_dim)
-        # return H_2  # (batch_size, z_dim)
-
-        # GNN  second stage
-        weight_adj = tf.Variable(tf.random_normal([node_num, node_num], stddev=0.35), dtype=tf.float32)
-        similarity = node_similarity(node_num, node_state)     # (node_num, node_num)
-        P_0 = weight_adj
+        h_0 = node_state
         for i in range(max_iteration):
-            P_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(tf.matmul(P_0, similarity), node_state)), learning_matrix)
-        return P_0
+            # clip_bounds = [0, 1]
+            # weight = tf.assign(weight, tf.clip_by_value(weight, clip_bounds[0], clip_bounds[1]))
+            h_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(init_prob, h_0), weight))     # (node_num, node_dim)
+        return h_0, init_prob   # (batch_size, z_dim)
+
+        # # GNN  second stage
+        # weight_adj = tf.Variable(tf.random_normal([node_num, node_num], stddev=0.35), dtype=tf.float32)
+        # similarity = node_similarity(node_num, node_state)     # (node_num, node_num)
+        # P_0 = weight_adj
+        # for i in range(max_iteration):
+        #     P_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(tf.matmul(P_0, similarity), node_state)), learning_matrix)
+        # return P_0
 
     def loss_reconstruction(self):
         loss_rec_mse_zq = tf.losses.mean_squared_error(self.input_x, self.x_hat_q)

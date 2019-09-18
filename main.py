@@ -1,5 +1,5 @@
 from vae import VAE
-from preprocess import data_mu_scaler, get_train_data
+from preprocess import data_mu_scaler, get_train_data, binarization, drawDAG, sigmoid, mask_data
 import tensorflow as tf
 import numpy as np
 import pandas as pd
@@ -49,6 +49,7 @@ def test(x_test):
         x_hat_e = graph.get_tensor_by_name("decoder_ze/result:0")
         embeddings = graph.get_tensor_by_name("embeddings:0")
         k_ = graph.get_tensor_by_name("k:0")
+        prob_ = graph.get_tensor_by_name("prob:0")
 
         # plt.ion()
         # for i in range(batch_num):
@@ -83,9 +84,22 @@ def test(x_test):
         plt.subplot(2, 1, 1)
         plt.plot(k_index)
         plt.subplot(2, 1, 2)
-        plt.plot(data)
+        plt.plot(mask)
         plt.show()
 
+        probs = []
+        for i in range(batch_num//batch_size):
+            prob = sess.run(prob_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+            probs.append(prob)
+        print(probs[0])
+        plt.subplot(1, 3, 1)
+        plt.imshow(probs[0], cmap="Greys", vmin=0, vmax=1)
+        plt.subplot(1, 3, 2)
+        plt.imshow(binarization(probs[0]), cmap="Greys", vmin=0, vmax=1)
+        plt.subplot(1, 3, 3)
+        plt.imshow(sigmoid(probs[0]), cmap="Greys", vmin=0, vmax=1)
+        plt.show()
+        # drawDAG(binarization(probs[0]))
         # print("k is ok")
         # fig = plt.figure()
         # ims = []
@@ -99,19 +113,19 @@ def test(x_test):
         # ani.save("test.mp4", writer='imagemagick')
 
 
-seq_len = 256
-step = 4
-z_dim = 32     # VAE hidden_state size
-hidden_dim = 12     # LSTM cell state size
-epochs = 500
-batch_size = 32
+seq_len = 128
+step = 16
+z_dim = 8     # VAE hidden_state size
+hidden_dim = 28     # LSTM cell state size
+epochs = 200
+batch_size = 8
 decay_factor = 0.9
-# data1 = [np.sin(np.pi*i*0.03125) for i in range(5000)]
-# data2 = [np.sin(np.pi * i * 0.04)+0.01*np.random.random() for i in range(10000)]
-# data = data2
-data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
-data = [(i-np.min(data))/(np.max(data)-np.min(data)) for i in data]
-x_train, y_train = get_train_data(data, seq_len, step)
+data1 = [np.sin(np.pi*i*0.03125) for i in range(5000)]
+raw_data = [np.sin(np.pi * i * 0.04) for i in range(10000)]
+# raw_data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
+# raw_data = [(i-np.min(raw_data))/(np.max(raw_data)-np.min(raw_data)) for i in raw_data]
+mask = mask_data(raw_data)
+x_train, y_train = get_train_data(mask, seq_len, step)
 x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")
 # data = [(i-np.mean(data)/np.std(data)) for i in data]

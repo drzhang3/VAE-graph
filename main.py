@@ -50,6 +50,25 @@ def test(x_test):
         embeddings = graph.get_tensor_by_name("embeddings:0")
         k_ = graph.get_tensor_by_name("k:0")
         prob_ = graph.get_tensor_by_name("prob:0")
+        node_state_ = tf.get_collection("node_state")[0]
+        z_e_ = tf.get_collection("z_e")[0]
+        # similarity = graph.get_tensor_by_name("similarity:0")
+        print("variable is ready")
+
+        for i in range(batch_num//batch_size):
+            node_state = sess.run(node_state_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+            z_e = sess.run(z_e_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+            # print(node_state)
+            # print(z_e)
+            plt.subplot(1, 2, 1)
+            plt.imshow(node_state, cmap="RdYlBu", vmin=0, vmax=1)
+            plt.colorbar()
+            plt.subplot(1, 2, 2)
+            plt.imshow(z_e, cmap="RdYlBu", vmin=0, vmax=1)
+            plt.colorbar()
+            plt.show()
+            if i == 0:
+                break
 
         # plt.ion()
         # for i in range(batch_num):
@@ -117,14 +136,15 @@ seq_len = 128
 step = 16
 z_dim = 8     # VAE hidden_state size
 hidden_dim = 28     # LSTM cell state size
-epochs = 200
+epochs = 20
 batch_size = 8
 decay_factor = 0.9
 data1 = [np.sin(np.pi*i*0.03125) for i in range(5000)]
 raw_data = [np.sin(np.pi * i * 0.04) for i in range(10000)]
 # raw_data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
 # raw_data = [(i-np.min(raw_data))/(np.max(raw_data)-np.min(raw_data)) for i in raw_data]
-mask = mask_data(raw_data)
+# mask = mask_data(raw_data)
+mask = raw_data
 x_train, y_train = get_train_data(mask, seq_len, step)
 x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")

@@ -6,15 +6,24 @@ import numpy as np
 def z_loss(x, y):
     return tf.losses.mean_squared_error(x, y)
 
+
 def compute_similarity(node1, node2):
-    return tf.multiply(node1, node2)/(tf.reduce_sum(node1), tf.reduce_sum(node2))
+    temp = np.multiply(node1, node2)
+    return np.sum(temp)/(np.sum(node1)*np.sum(node2))
+
 
 def node_similarity(node_num, node_state):
     similarity = np.zeros([node_num, node_num])
+    # similarity = tf.convert_to_tensor(similarity)
     for i in range(node_num):
         for j in range(node_num):
-            similarity[i][j] = compute_similarity(node_state[i], node_state[j])
+            temp = np.dot(node_state[i], node_state[j])
+            print(temp)
+            # print(tf.reduce_sum(node_state[i]))
+            # res = np.sum(temp) / (tf.reduce_sum(node_state[i]) * tf.reduce_sum(node_state[j]))
+            similarity[i, j] = temp
     return similarity
+
 
 class VAE():
     def __init__(self, z_dim, seq_len, input_dim, hidden_dim):
@@ -30,8 +39,8 @@ class VAE():
         self.embeddings = self.embeddings()
         self.transition_probabilities = self.transition_probabilities()
         self.z_e, self.mu, self.sigma_2 = self.encoder()
-        self.z_e_x, self.z_e_y = self.get_z_e(self.z_e)
         self.z_graph, self.init_prob = self._graph()
+        self.z_e_x, self.z_e_y = self.get_z_e(self.z_graph)
         self.z_e_old = self.z_e_old()
         self.k = self.k()
         self.z_q = self.z_q()
@@ -52,7 +61,7 @@ class VAE():
             sigma = tf.sqrt(sigma_2)
             epsilon = tf.random_normal(shape=tf.shape(sigma))
             z_e = mu + sigma * epsilon
-            return mu, mu, tf.square(sigma)
+            return z_e, mu, tf.square(sigma)
             # return z_e
 
     def z_e_old(self):
@@ -125,7 +134,7 @@ class VAE():
 
     def decoder_ze(self):
         with tf.variable_scope("decoder_ze", reuse=tf.AUTO_REUSE):
-            h_3 = dense(self.z_e, 2*self.z_dim, activation=tf.nn.relu)
+            h_3 = dense(self.z_graph, 2*self.z_dim, activation=tf.nn.relu)
             x_hat = dense(h_3, self.seq_len)
             x_hat = tf.expand_dims(x_hat, 1, name="result")
             return x_hat
@@ -166,10 +175,11 @@ class VAE():
         return outputs
 
     def _graph(self):
-        max_iteration = 5
+        max_iteration = 1
         node_num = 8
         node_dim = self.z_dim
         node_state = self.z_e       # (node_num, node_dim)
+        tf.add_to_collection("z_e", node_state)
         init_prob = tf.get_variable("prob", [node_num, node_num],
                                     initializer=tf.truncated_normal_initializer(stddev=0.05))
         weight = tf.Variable(tf.random_normal([node_dim, node_dim], stddev=0.35), dtype=tf.float32)
@@ -181,15 +191,18 @@ class VAE():
             # clip_bounds = [0, 1]
             # weight = tf.assign(weight, tf.clip_by_value(weight, clip_bounds[0], clip_bounds[1]))
             h_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(init_prob, h_0), weight))     # (node_num, node_dim)
-        return h_0, init_prob   # (batch_size, z_dim)
 
         # # GNN  second stage
         # weight_adj = tf.Variable(tf.random_normal([node_num, node_num], stddev=0.35), dtype=tf.float32)
-        # similarity = node_similarity(node_num, node_state)     # (node_num, node_num)
+        # similarity = node_similarity(node_num, h_0)     # (node_num, node_num)
+        # tf.add_to_collection("similarity", similarity)
+
+        tf.add_to_collection("node_state", h_0)
         # P_0 = weight_adj
         # for i in range(max_iteration):
         #     P_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(tf.matmul(P_0, similarity), node_state)), learning_matrix)
         # return P_0
+        return h_0, init_prob   # (batch_size, z_dim)
 
     def loss_reconstruction(self):
         loss_rec_mse_zq = tf.losses.mean_squared_error(self.input_x, self.x_hat_q)
@@ -245,7 +258,7 @@ class VAE():
 
     def optimize(self):
         with tf.variable_scope("optimize"):
-            starter_learning_rate = 0.0005
+            starter_learning_rate = 0.001
             learning_rate = tf.train.exponential_decay(starter_learning_rate, self.global_step,
                                                 200, 0.9, staircase=True)
             optimizer = tf.train.AdamOptimizer(learning_rate)

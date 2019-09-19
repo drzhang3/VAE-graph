@@ -136,12 +136,12 @@ def test(x_test):
         # ani.save("test.mp4", writer='imagemagick')
 
 
-seq_len = 32
-step = 2
-z_dim = 8     # VAE hidden_state size
+seq_len = 64
+step = 8
+z_dim = 16     # VAE hidden_state size
 hidden_dim = 8     # LSTM cell state size
-epochs = 20
-batch_size = 8
+epochs = 200
+batch_size = 16
 decay_factor = 0.9
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]
 data2 = [np.sin(np.pi*i*0.02) for i in range(5000)]
@@ -158,5 +158,6 @@ print(x_train.shape)
 model = VAE(z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim)
 loss = train(model, x_train, epochs, batch_size)
 plt.plot(loss)
+plt.savefig("./fig/loss.png")
 plt.show()
 test(x_train)

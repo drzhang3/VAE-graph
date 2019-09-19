@@ -37,7 +37,7 @@ class VAE():
         self.seq_len = seq_len
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.input_x = tf.placeholder(shape=[8, input_dim, seq_len], dtype=tf.float32, name="input_x")
+        self.input_x = tf.placeholder(shape=[16, input_dim, seq_len], dtype=tf.float32, name="input_x")
         self.global_step = tf.Variable(0, trainable=False, name="global_step")
         self.decay_steps = 500
         self.batch_size = tf.shape(self.input_x)[0]
@@ -185,12 +185,15 @@ class VAE():
         #with tf.variable_scope("gcn", reuse=tf.AUTO_REUSE):
 
         max_iteration = 2
-        node_num = 8    # node_num = batch_size
+        node_num = 16    # node_num = batch_size
         node_dim = self.z_dim
         node_state = self.z_e       # (node_num, node_dim)
         tf.add_to_collection("z_e", node_state)
+        # init_prob = tf.get_variable("prob", [node_num, node_num],
+        #                             initializer=tf.truncated_normal_initializer(stddev=0.05))
         init_prob = tf.get_variable("prob", [node_num, node_num],
-                                    initializer=tf.truncated_normal_initializer(stddev=0.05))
+                                    initializer=tf.glorot_normal_initializer())
+
         weight = tf.Variable(tf.random_normal([node_dim, node_dim], stddev=0.35), dtype=tf.float32)
         learning_matrix = tf.Variable(tf.random_normal([node_dim, node_num], stddev=0.35), dtype=tf.float32)
         print(weight.get_shape())

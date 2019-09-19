@@ -25,6 +25,12 @@ def node_similarity(node_num, node_state):
     return similarity
 
 
+def init_adj_prob(n):
+    mat = np.random.random([n, n])
+    for i in range(n):
+        mat[i][i] = 1
+    return mat
+
 class VAE():
     def __init__(self, z_dim, seq_len, input_dim, hidden_dim):
         self.z_dim = z_dim
@@ -39,7 +45,8 @@ class VAE():
         self.embeddings = self.embeddings()
         self.transition_probabilities = self.transition_probabilities()
         self.z_e, self.mu, self.sigma_2 = self.encoder()
-        self.z_graph, self.init_prob = self._graph()
+        self.z_graph = self._graph()
+        # self.z_graph = self.z_e
         self.z_e_x, self.z_e_y = self.get_z_e(self.z_graph)
         self.z_e_old = self.z_e_old()
         self.k = self.k()
@@ -95,7 +102,7 @@ class VAE():
         k_1 = self.k // self.som_dim[1]
         k_2 = self.k % self.som_dim[1]
         k_stacked = tf.stack([k_1, k_2], axis=1)
-        z_q = tf.gather_nd(self.embeddings, k_stacked)  # (batch_size, z_dim)
+        z_q = tf.gather_nd(self.embeddings, k_stacked)   # (batch_size, z_dim)
         return z_q
 
     def z_q_neighbors(self):
@@ -175,8 +182,10 @@ class VAE():
         return outputs
 
     def _graph(self):
-        max_iteration = 1
-        node_num = 8
+        #with tf.variable_scope("gcn", reuse=tf.AUTO_REUSE):
+
+        max_iteration = 2
+        node_num = 8    # node_num = batch_size
         node_dim = self.z_dim
         node_state = self.z_e       # (node_num, node_dim)
         tf.add_to_collection("z_e", node_state)
@@ -188,21 +197,17 @@ class VAE():
         # GCN  first stage
         h_0 = node_state
         for i in range(max_iteration):
-            # clip_bounds = [0, 1]
-            # weight = tf.assign(weight, tf.clip_by_value(weight, clip_bounds[0], clip_bounds[1]))
             h_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(init_prob, h_0), weight))     # (node_num, node_dim)
-
+        tf.add_to_collection("node_state", h_0)
+        return h_0       # (batch_size, z_dim)
         # # GNN  second stage
         # weight_adj = tf.Variable(tf.random_normal([node_num, node_num], stddev=0.35), dtype=tf.float32)
         # similarity = node_similarity(node_num, h_0)     # (node_num, node_num)
         # tf.add_to_collection("similarity", similarity)
-
-        tf.add_to_collection("node_state", h_0)
         # P_0 = weight_adj
         # for i in range(max_iteration):
         #     P_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(tf.matmul(P_0, similarity), node_state)), learning_matrix)
         # return P_0
-        return h_0, init_prob   # (batch_size, z_dim)
 
     def loss_reconstruction(self):
         loss_rec_mse_zq = tf.losses.mean_squared_error(self.input_x, self.x_hat_q)
@@ -250,7 +255,7 @@ class VAE():
         with tf.variable_scope("loss"):
             # loss_rec = tf.losses.mean_squared_error(self.input_x, self.x_hat)
             loss_kl = - 0.5 * tf.reduce_sum(1-tf.square(self.mu)-self.sigma_2+tf.log(self.sigma_2))
-            #loss = self.loss_reconstruction() + loss_kl
+            # loss = self.loss_reconstruction() + loss_kl
             # loss = self.loss_reconstruction()+self.loss_commitment()+self.loss_som()+\
             #      self.loss_probabilities() + self.loss_z_prob()
             loss = self.loss_reconstruction()+self.run_lstm_ze()
@@ -258,9 +263,10 @@ class VAE():
 
     def optimize(self):
         with tf.variable_scope("optimize"):
-            starter_learning_rate = 0.001
+            starter_learning_rate = 0.005
             learning_rate = tf.train.exponential_decay(starter_learning_rate, self.global_step,
-                                                200, 0.9, staircase=True)
+                                                       50, 0.9, staircase=True)
             optimizer = tf.train.AdamOptimizer(learning_rate)
+            # optimizer = tf.train.AdadeltaOptimizer()
             return optimizer
 

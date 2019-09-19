@@ -19,6 +19,7 @@ def binarization(matrix):
                 matrix[i][j] = 1
     return matrix
 
+
 def get_train_data(value, seq_len, step):
     """
     Create x, y train data windows.
@@ -65,25 +66,28 @@ def cid_ce(x, normalize):
         else:
             return 0.0
 
-def drawDAG(Matrix):
+
+def drawDAG(matrix):
     G = nx.DiGraph()
     #nodes = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
     #G.add_nodes_from(nodes)
-    for i in range(len(Matrix)):
-        for j in range(len(Matrix)):
-            if Matrix[i,j]:
+    for i in range(len(matrix)):
+        for j in range(len(matrix)):
+            if matrix[i,j]:
                 G.add_edge(i+1, j+1)
     #G=G.to_directed()
     pos = nx.spring_layout(G)
     nx.draw(G,pos, with_labels=True, edge_color='b', node_color='g', node_size=1000)
     plt.show()
 
+
 def sigmoid(matrix):
     shape = np.shape(matrix)
+    mat = np.zeros([shape[0], shape[0]])
     for i in range(shape[0]):
         for j in range(shape[1]):
-            matrix[i][j] = 1/(1+np.exp(-matrix[i][j]))
-    return matrix
+            mat[i][j] = 1/(1+np.exp(-matrix[i][j]))
+    return mat
 
 
 def mask_data(data):

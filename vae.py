@@ -115,7 +115,8 @@ class VAE():
         node_state = self.z_e       # (node_num, node_dim)
         tf.add_to_collection("z_e", node_state)
         init_prob = tf.get_variable("prob", [node_num, node_num],
-                                    initializer=tf.truncated_normal_initializer(stddev=0.05))
+                                    initializer=tf.truncated_normal_initializer(stddev=0.05),
+                                    constraint=lambda x: tf.clip_by_value(x, -1, 1))
         # init_prob = tf.get_variable("prob", [node_num, node_num],
         #                             initializer=tf.orthogonal_initializer(),
         #                             constraint=lambda x: tf.clip_by_value(x, -1, 1))

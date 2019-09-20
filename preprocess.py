@@ -1,10 +1,23 @@
 import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
 
 
 def data_mu_scaler(values_):
     values = np.reshape(values_, [-1, 1])
     # values = np.array(values)
     return (values - np.mean(values)) / np.std(values)
+
+
+def binarization(matrix):
+    shape = np.shape(matrix)
+    for i in range(shape[0]):
+        for j in range(shape[1]):
+            if matrix[i][j] < -0.02:
+                matrix[i][j] = 0
+            else:
+                matrix[i][j] = 1
+    return matrix
 
 
 def get_train_data(value, seq_len, step):
@@ -52,3 +65,35 @@ def cid_ce(x, normalize):
             x = (x - np.mean(x))/s
         else:
             return 0.0
+
+
+def drawDAG(matrix):
+    G = nx.DiGraph()
+    #nodes = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+    #G.add_nodes_from(nodes)
+    for i in range(len(matrix)):
+        for j in range(len(matrix)):
+            if matrix[i,j]:
+                G.add_edge(i+1, j+1)
+    #G=G.to_directed()
+    pos = nx.spring_layout(G)
+    nx.draw(G,pos, with_labels=True, edge_color='b', node_color='g', node_size=1000)
+    plt.show()
+
+
+def sigmoid(matrix):
+    shape = np.shape(matrix)
+    mat = np.zeros([shape[0], shape[0]])
+    for i in range(shape[0]):
+        for j in range(shape[1]):
+            mat[i][j] = 1/(1+np.exp(-matrix[i][j]))
+    return mat
+
+
+def mask_data(data):
+    # mask = np.random.choice([0, 1], size=np.shape(data[0]), p=[.1, .9])
+    mask = np.ones(np.shape(data)[0])
+    prop = int(0.05*np.shape(data)[0])
+    mask[:prop] = 0
+    np.random.shuffle(mask)
+    return mask*np.array(data)

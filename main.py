@@ -133,7 +133,7 @@ def test(x_test):
 
 seq_len = 32
 step = 2
-z_dim = 4     # VAE hidden_state size
+z_dim = 8     # VAE hidden_state size
 hidden_dim = 4     # LSTM cell state size
 epochs = 20
 batch_size = 8

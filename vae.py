@@ -25,6 +25,17 @@ def node_similarity(node_num, node_state):
     return similarity
 
 
+def get_z_e(data, seq_len=3, step=1):
+    z_e_x = []
+    z_e_y = []
+    for i in range(0, data.shape[0] - seq_len, step):
+        x = data[i:i + seq_len + 1]
+        y = data[i:i + seq_len + 1]
+        z_e_x.append(x[:-1])
+        z_e_y.append(y[-1])
+    return z_e_x, z_e_y, i+1
+
+
 def init_adj_prob(n):
     mat = np.random.random([n, n])
     for i in range(n):
@@ -40,12 +51,10 @@ class VAE():
         self.hidden_dim = hidden_dim
         self.input_x = tf.placeholder(shape=[8, input_dim, seq_len], dtype=tf.float32, name="input_x")
         self.global_step = tf.Variable(0, trainable=False, name="global_step")
-        self.decay_steps = 500
         self.batch_size = tf.shape(self.input_x)[0]
         self.z_e, self.mu, self.sigma_2 = self.encoder()
         self.z_graph = self._graph()
         # self.z_graph = self.z_e
-        self.z_e_x, self.z_e_y = self.get_z_e(self.z_graph)
         self.x_hat_e = self.decoder_ze()
         self.x_hat_q = self.decoder_zq()
         self.loss = self.get_loss()
@@ -79,21 +88,12 @@ class VAE():
             x_hat = tf.expand_dims(x_hat, 1, name='result')
         return x_hat
 
-    def get_z_e(self, value, seq_len=3, step=1):
-        z_e_x = []
-        z_e_y = []
-        for i in range(0, value.shape[0] - seq_len, step):
-            x = value[i:i + seq_len + 1]
-            y = value[i:i + seq_len + 1]
-            z_e_x.append(x[:-1])
-            z_e_y.append(y[-1])
-        return z_e_x, z_e_y
-
     def run_lstm_ze(self):
+        z_e_x, z_e_y, num = get_z_e(self.z_graph)
         loss = []
-        for i in range(5):
-            outputs = self.lstm_vae(self.z_e_x[i])
-            loss.append(z_loss(outputs, self.z_e_y[i]))
+        for i in range(num):
+            outputs = self.lstm_vae(z_e_x[i])
+            loss.append(z_loss(outputs, z_e_y[i]))
         return tf.reduce_mean(loss)
 
     def lstm_vae(self, x_data):
@@ -108,18 +108,17 @@ class VAE():
         return outputs
 
     def _graph(self):
-        #with tf.variable_scope("gcn", reuse=tf.AUTO_REUSE):
-
-        max_iteration = 1
+        # with tf.variable_scope("gcn", reuse=tf.AUTO_REUSE):
+        max_iteration = 3
         node_num = 8    # node_num = batch_size
         node_dim = self.z_dim
         node_state = self.z_e       # (node_num, node_dim)
         tf.add_to_collection("z_e", node_state)
-        # init_prob = tf.get_variable("prob", [node_num, node_num],
-        #                             initializer=tf.truncated_normal_initializer(stddev=0.05))
         init_prob = tf.get_variable("prob", [node_num, node_num],
-                                    initializer=tf.glorot_normal_initializer())
-
+                                    initializer=tf.truncated_normal_initializer(stddev=0.05))
+        # init_prob = tf.get_variable("prob", [node_num, node_num],
+        #                             initializer=tf.orthogonal_initializer(),
+        #                             constraint=lambda x: tf.clip_by_value(x, -1, 1))
         weight = tf.Variable(tf.random_normal([node_dim, node_dim], stddev=0.35), dtype=tf.float32)
         learning_matrix = tf.Variable(tf.random_normal([node_dim, node_num], stddev=0.35), dtype=tf.float32)
         print(weight.get_shape())

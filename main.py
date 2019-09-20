@@ -63,11 +63,11 @@ def test(x_test):
             # print(z_e)
             plt.subplot(1, 2, 1)
             plt.title("state after GCN")
-            plt.imshow(node_state, cmap="RdYlBu", vmin=0, vmax=1, origin='low')
+            plt.imshow(node_state, cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
             plt.colorbar()
             plt.subplot(1, 2, 2)
             plt.title("state before GCN")
-            plt.imshow(z_e, cmap="RdYlBu", vmin=0, vmax=1, origin='low')
+            plt.imshow(z_e, cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
             plt.colorbar()
             plt.show()
             if i == 0:
@@ -116,11 +116,14 @@ def test(x_test):
             probs.append(prob)
         #print(probs[0])
         plt.subplot(1, 3, 1)
-        plt.imshow(probs[0], cmap="Greys", vmin=0, vmax=1, origin='low')
+        plt.imshow(probs[0], cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+        plt.colorbar()
         plt.subplot(1, 3, 2)
-        plt.imshow(binarization(probs[0]), cmap="Greys", vmin=0, vmax=1, origin='low')
+        plt.imshow(binarization(probs[0]), cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+        plt.colorbar()
         plt.subplot(1, 3, 3)
-        plt.imshow(sigmoid(probs[0]), cmap="Greys", vmin=0, vmax=1, origin='low')
+        plt.imshow(sigmoid(probs[0]), cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+        plt.colorbar()
         plt.show()
         # drawDAG(binarization(probs[0]))
         # print("k is ok")
@@ -138,24 +141,24 @@ def test(x_test):
 
 seq_len = 64
 step = 8
-z_dim = 16     # VAE hidden_state size
+z_dim = 8     # VAE hidden_state size
 hidden_dim = 8     # LSTM cell state size
-epochs = 200
-batch_size = 16
+epochs = 100
+batch_size = 8
 decay_factor = 0.9
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]
 data2 = [np.sin(np.pi*i*0.02) for i in range(5000)]
-raw_data = [np.sin(np.pi * i * 0.04) for i in range(10000)]
-raw_data = data1 + data2
+raw_data = [np.sin(np.pi * i * 0.04) for i in range(5000)]
+# raw_data = data1 + data2
 # raw_data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
 # raw_data = [(i-np.min(raw_data))/(np.max(raw_data)-np.min(raw_data)) for i in raw_data]
-mask = mask_data(raw_data)
+mask = raw_data
 x_train, y_train = get_train_data(mask, seq_len, step)
 x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")
 # data = [(i-np.mean(data)/np.std(data)) for i in data]
 print(x_train.shape)
-# model = VAE(z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim)
+# model = VAE(batch_size=batch_size, z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim)
 # loss = train(model, x_train, epochs, batch_size)
 # plt.plot(loss)
 # plt.savefig("./fig/loss.png")

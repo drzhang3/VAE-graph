@@ -31,6 +31,7 @@ def init_adj_prob(n):
         mat[i][i] = 1
     return mat
 
+
 class VAE():
     def __init__(self, batch_size, z_dim, seq_len, input_dim, hidden_dim):
         self.batch_size = batch_size

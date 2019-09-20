@@ -143,7 +143,7 @@ seq_len = 64
 step = 8
 z_dim = 8     # VAE hidden_state size
 hidden_dim = 8     # LSTM cell state size
-epochs = 100
+epochs = 20
 batch_size = 8
 decay_factor = 0.9
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]
@@ -158,9 +158,9 @@ x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")
 # data = [(i-np.mean(data)/np.std(data)) for i in data]
 print(x_train.shape)
-# model = VAE(batch_size=batch_size, z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim)
-# loss = train(model, x_train, epochs, batch_size)
-# plt.plot(loss)
-# plt.savefig("./fig/loss.png")
-# plt.show()
+model = VAE(batch_size=batch_size, z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim)
+loss = train(model, x_train, epochs, batch_size)
+plt.plot(loss)
+plt.savefig("./fig/loss.png")
+plt.show()
 test(x_train)

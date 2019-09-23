@@ -141,8 +141,10 @@ class VAE():
     def loss_reconstruction(self):
         with tf.variable_scope("loss_reconstruction"):
             loss_rec_mse_zq = tf.losses.mean_squared_error(self.input_x, self.x_hat_q)
-            loss_rec_mse_ze = tf.losses.mean_squared_error(self.input_x, self.x_hat_e)
-            loss_rec_mse = loss_rec_mse_ze + loss_rec_mse_zq
+            loss_rec_mse_ze = tf.reduce_sum(tf.square(self.input_x-self.x_hat_e), axis=-1)
+            loss_kl = - 0.5 * tf.reduce_sum(1-tf.square(self.mu)-self.sigma_2+tf.log(self.sigma_2), axis=-1)
+            vae_loss = tf.reduce_mean(loss_rec_mse_ze + loss_kl)
+            loss_rec_mse = vae_loss + loss_rec_mse_zq
         tf.summary.scalar("loss_reconstruction", loss_rec_mse)
         return loss_rec_mse_ze
 
@@ -160,7 +162,6 @@ class VAE():
 
     def get_loss(self):
         with tf.variable_scope("loss"):
-            # loss_kl = - 0.5 * tf.reduce_sum(1-tf.square(self.mu)-self.sigma_2+tf.log(self.sigma_2))
             loss = self.loss_reconstruction() + self.loss_commitment() + self.loss_graph()
         tf.summary.scalar("loss", loss)
         return loss

@@ -148,24 +148,24 @@ seq_len = 64
 step = 8
 z_dim = 8     # VAE hidden_state size
 hidden_dim = 8     # LSTM cell state size
-epochs = 100
-batch_size = 8
+epochs = 50
+batch_size = 10
 decay_factor = 0.9
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]
 data2 = [np.sin(np.pi*i*0.02) for i in range(5000)]
-raw_data = [np.sin(np.pi * i * 0.04) for i in range(5000)]
+raw_data = [np.sin(np.pi * i * 0.04) for i in range(2000)]
 # raw_data = data1 + data2
 # raw_data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
 # raw_data = [(i-np.min(raw_data))/(np.max(raw_data)-np.min(raw_data)) for i in raw_data]
-mask = raw_data
+mask = mask_data(raw_data)
 x_train, y_train = get_train_data(mask, seq_len, step)
 x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")
 # data = [(i-np.mean(data)/np.std(data)) for i in data]
 print(x_train.shape)
-# model = VAE(batch_size=batch_size, z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim)
-# loss = train(model, x_train, epochs, batch_size)
-# plt.plot(loss)
-# plt.savefig("./fig/loss.png")
-# plt.show()
+model = VAE(batch_size=batch_size, z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim)
+loss = train(model, x_train, epochs, batch_size)
+plt.plot(loss)
+plt.savefig("./fig/loss.png")
+plt.show()
 test(x_train)

@@ -263,11 +263,9 @@ class VAE():
 
         pass
 
-
     def get_loss(self):
         with tf.variable_scope("loss"):
             # loss_rec = tf.losses.mean_squared_error(self.input_x, self.x_hat)
-
             # loss = self.loss_reconstruction() + loss_kl
             # loss = self.loss_reconstruction()+self.loss_commitment()+self.loss_som()+\
             #      self.loss_probabilities() + self.loss_z_prob()

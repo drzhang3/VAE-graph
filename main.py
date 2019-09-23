@@ -114,17 +114,22 @@ def test(x_test):
         for i in range(batch_num//batch_size):
             prob = sess.run(prob_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
             probs.append(prob)
+
         #print(probs[0])
-        plt.subplot(1, 3, 1)
-        plt.imshow(probs[0], cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
-        plt.colorbar()
-        plt.subplot(1, 3, 2)
-        plt.imshow(binarization(probs[0]), cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
-        plt.colorbar()
-        plt.subplot(1, 3, 3)
-        plt.imshow(sigmoid(probs[0]), cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
-        plt.colorbar()
-        plt.show()
+            # plt.subplot(1, 3, 1)
+            # plt.imshow(probs[i], cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+            # plt.colorbar()
+            # plt.subplot(1, 3, 2)
+            # plt.imshow(binarization(probs[i]), cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+            # plt.colorbar()
+            # plt.subplot(1, 3, 3)
+            # plt.imshow(sigmoid(probs[i]), cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+            # plt.colorbar()
+            # plt.show()
+            print(probs[0]==probs[i])
+            if i == 30:
+                break
+
         # drawDAG(binarization(probs[0]))
         # print("k is ok")
         # fig = plt.figure()
@@ -143,7 +148,7 @@ seq_len = 64
 step = 8
 z_dim = 8     # VAE hidden_state size
 hidden_dim = 8     # LSTM cell state size
-epochs = 20
+epochs = 100
 batch_size = 8
 decay_factor = 0.9
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]

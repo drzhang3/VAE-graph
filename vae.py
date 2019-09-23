@@ -17,7 +17,7 @@ def node_similarity(node_num, node_state):
     # similarity = tf.convert_to_tensor(similarity)
     for i in range(node_num):
         for j in range(node_num):
-            temp = np.dot(node_state[i], node_state[j])
+            temp = tf.tensordot(node_state[i], node_state[j])
             print(temp)
             # print(tf.reduce_sum(node_state[i]))
             # res = np.sum(temp) / (tf.reduce_sum(node_state[i]) * tf.reduce_sum(node_state[j]))
@@ -193,8 +193,8 @@ class VAE():
         tf.add_to_collection("z_e", node_state)
         # init_prob = tf.get_variable("prob", [node_num, node_num],
         #                             initializer=tf.truncated_normal_initializer(stddev=0.05))
-        init_prob = tf.get_variable("prob", [node_num, node_num],
-                                    initializer=tf.orthogonal_initializer())
+        self.init_prob = tf.get_variable("prob", [node_num, node_num],
+                                    initializer=tf.truncated_normal_initializer(stddev=0.05))
 
         weight = tf.Variable(tf.random_normal([node_dim, node_dim], stddev=0.35), dtype=tf.float32)
         learning_matrix = tf.Variable(tf.random_normal([node_dim, node_num], stddev=0.35), dtype=tf.float32)
@@ -202,7 +202,8 @@ class VAE():
         # GCN  first stage
         h_0 = node_state
         for i in range(max_iteration):
-            h_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(init_prob, h_0), weight))     # (node_num, node_dim)
+            h_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(self.init_prob, h_0), weight))     # (node_num, node_dim)
+        h_0 = dense(h_0, node_dim)
         tf.add_to_collection("node_state", h_0)
         return h_0       # (batch_size, z_dim)
         # # GNN  second stage
@@ -216,8 +217,10 @@ class VAE():
 
     def loss_reconstruction(self):
         loss_rec_mse_zq = tf.losses.mean_squared_error(self.input_x, self.x_hat_q)
-        loss_rec_mse_ze = tf.losses.mean_squared_error(self.input_x, self.x_hat_e)
-        loss_rec_mse = loss_rec_mse_ze
+        loss_rec_mse_ze = tf.reduce_sum(tf.square(self.input_x - self.x_hat_e), axis=-1)
+        loss_kl = - 0.5 * tf.reduce_sum(1 - tf.square(self.mu) - self.sigma_2 + tf.log(self.sigma_2), axis=-1)
+        vae_loss = loss_rec_mse_ze + loss_kl
+        loss_rec_mse = vae_loss
         tf.summary.scalar("loss_reconstruction", loss_rec_mse)
         return loss_rec_mse_ze
 
@@ -256,22 +259,29 @@ class VAE():
         loss_z_prob = tf.reduce_mean(weighted_z_dist_prob)
         return loss_z_prob
 
+    def w_loss(self):
+
+        pass
+
+
     def get_loss(self):
         with tf.variable_scope("loss"):
             # loss_rec = tf.losses.mean_squared_error(self.input_x, self.x_hat)
-            loss_kl = - 0.5 * tf.reduce_sum(1-tf.square(self.mu)-self.sigma_2+tf.log(self.sigma_2))
+
             # loss = self.loss_reconstruction() + loss_kl
             # loss = self.loss_reconstruction()+self.loss_commitment()+self.loss_som()+\
             #      self.loss_probabilities() + self.loss_z_prob()
-            loss = self.loss_reconstruction()+self.run_lstm_ze()
+            loss = self.loss_reconstruction() + self.run_lstm_ze()
             return loss
 
     def optimize(self):
         with tf.variable_scope("optimize"):
             starter_learning_rate = 0.005
             learning_rate = tf.train.exponential_decay(starter_learning_rate, self.global_step,
-                                                       50, 0.9, staircase=True)
+                                                       20, 0.9, staircase=True)
             optimizer = tf.train.AdamOptimizer(learning_rate)
             # optimizer = tf.train.AdadeltaOptimizer()
+            # optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+            # optimizer = tf.train.MomentumOptimizer(learning_rate, momentum=0.9)
             return optimizer
 

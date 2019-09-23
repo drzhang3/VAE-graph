@@ -12,8 +12,8 @@ def compute_similarity(node1, node2):
     return np.sum(temp)/(np.sum(node1)*np.sum(node2))
 
 
-def node_similarity(node_num, node_state):
-    similarity = tf.matmul(node_state, tf.transpose(node_state))
+def node_similarity(node_state):
+    similarity = tf.matmul(node_state, tf.transpose(node_state))/tf.norm(node_state, axis=-1)
     return similarity
 
 
@@ -50,7 +50,7 @@ class VAE():
         self.embeddings = self.embeddings()
         self.transition_probabilities = self.transition_probabilities()
         self.z_e, self.mu, self.sigma_2 = self.encoder()
-        self.z_graph = self._graph()
+        self.z_graph, self.ww = self._graph()
         # self.z_graph = self.z_e
         self.z_e_old = self.z_e_old()
         self.k = self.k()
@@ -192,12 +192,13 @@ class VAE():
         print(weight.get_shape())
         # GCN  first stage
         h_0 = node_state
-        similarity = node_similarity(node_num, h_0)
+        similarity = node_similarity(h_0)
         for i in range(max_iteration):
             h_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(self.init_prob, h_0), weight))     # (node_num, node_dim)
         h_0 = dense(h_0, node_dim)
         tf.add_to_collection("node_state", h_0)
-        return h_0       # (batch_size, z_dim)
+        loss = tf.reduce_sum(tf.square(self.init_prob - node_similarity(node_state)))
+        return h_0, loss       # (batch_size, z_dim)
         # # GNN  second stage
         # weight_adj = tf.Variable(tf.random_normal([node_num, node_num], stddev=0.35), dtype=tf.float32)
 
@@ -251,17 +252,13 @@ class VAE():
         loss_z_prob = tf.reduce_mean(weighted_z_dist_prob)
         return loss_z_prob
 
-    def w_loss(self):
-
-        pass
-
     def get_loss(self):
         with tf.variable_scope("loss"):
             # loss_rec = tf.losses.mean_squared_error(self.input_x, self.x_hat)
             # loss = self.loss_reconstruction() + loss_kl
             # loss = self.loss_reconstruction()+self.loss_commitment()+self.loss_som()+\
             #      self.loss_probabilities() + self.loss_z_prob()
-            loss = self.loss_reconstruction() + self.run_lstm_ze()
+            loss = self.loss_reconstruction() + self.run_lstm_ze() + self.ww
             return loss
 
     def optimize(self):

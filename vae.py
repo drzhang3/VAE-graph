@@ -13,16 +13,19 @@ def compute_similarity(node1, node2):
 
 
 def node_similarity(node_num, node_state):
-    similarity = np.zeros([node_num, node_num])
-    # similarity = tf.convert_to_tensor(similarity)
-    for i in range(node_num):
-        for j in range(node_num):
-            temp = tf.tensordot(node_state[i], node_state[j])
-            print(temp)
-            # print(tf.reduce_sum(node_state[i]))
-            # res = np.sum(temp) / (tf.reduce_sum(node_state[i]) * tf.reduce_sum(node_state[j]))
-            similarity[i, j] = temp
+    similarity = tf.matmul(node_state, tf.transpose(node_state))
     return similarity
+
+
+def get_z_e(value, seq_len=3, step=1):
+    z_e_x = []
+    z_e_y = []
+    for i in range(0, value.shape[0] - seq_len, step):
+        x = value[i:i + seq_len + 1]
+        y = value[i:i + seq_len + 1]
+        z_e_x.append(x[:-1])
+        z_e_y.append(y[-1])
+    return z_e_x, z_e_y, i+1
 
 
 def init_adj_prob(n):
@@ -49,7 +52,6 @@ class VAE():
         self.z_e, self.mu, self.sigma_2 = self.encoder()
         self.z_graph = self._graph()
         # self.z_graph = self.z_e
-        self.z_e_x, self.z_e_y = self.get_z_e(self.z_graph)
         self.z_e_old = self.z_e_old()
         self.k = self.k()
         self.z_q = self.z_q()
@@ -155,21 +157,12 @@ class VAE():
             x_hat = tf.expand_dims(x_hat, 1, name='result')
             return x_hat
 
-    def get_z_e(self, value, seq_len=3, step=1):
-        z_e_x = []
-        z_e_y = []
-        for i in range(0, value.shape[0] - seq_len, step):
-            x = value[i:i + seq_len + 1]
-            y = value[i:i + seq_len + 1]
-            z_e_x.append(x[:-1])
-            z_e_y.append(y[-1])
-        return z_e_x, z_e_y
-
     def run_lstm_ze(self):
+        z_e_x, z_e_y, num = get_z_e(self.z_graph)
         loss = []
-        for i in range(5):
-            outputs = self.lstm_vae(self.z_e_x[i])
-            loss.append(z_loss(outputs, self.z_e_y[i]))
+        for i in range(num):
+            outputs = self.lstm_vae(z_e_x[i])
+            loss.append(z_loss(outputs, z_e_y[i]))
         return tf.reduce_mean(loss)
 
     def lstm_vae(self, x_data):
@@ -185,7 +178,6 @@ class VAE():
 
     def _graph(self):
         #with tf.variable_scope("gcn", reuse=tf.AUTO_REUSE):
-
         max_iteration = 2
         node_num = self.batch_size    # node_num = batch_size
         node_dim = self.z_dim
@@ -194,13 +186,13 @@ class VAE():
         # init_prob = tf.get_variable("prob", [node_num, node_num],
         #                             initializer=tf.truncated_normal_initializer(stddev=0.05))
         self.init_prob = tf.get_variable("prob", [node_num, node_num],
-                                    initializer=tf.truncated_normal_initializer(stddev=0.05))
-
+                                    initializer=tf.orthogonal_initializer())
         weight = tf.Variable(tf.random_normal([node_dim, node_dim], stddev=0.35), dtype=tf.float32)
         learning_matrix = tf.Variable(tf.random_normal([node_dim, node_num], stddev=0.35), dtype=tf.float32)
         print(weight.get_shape())
         # GCN  first stage
         h_0 = node_state
+        similarity = node_similarity(node_num, h_0)
         for i in range(max_iteration):
             h_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(self.init_prob, h_0), weight))     # (node_num, node_dim)
         h_0 = dense(h_0, node_dim)
@@ -208,7 +200,7 @@ class VAE():
         return h_0       # (batch_size, z_dim)
         # # GNN  second stage
         # weight_adj = tf.Variable(tf.random_normal([node_num, node_num], stddev=0.35), dtype=tf.float32)
-        # similarity = node_similarity(node_num, h_0)     # (node_num, node_num)
+
         # tf.add_to_collection("similarity", similarity)
         # P_0 = weight_adj
         # for i in range(max_iteration):
@@ -219,7 +211,7 @@ class VAE():
         loss_rec_mse_zq = tf.losses.mean_squared_error(self.input_x, self.x_hat_q)
         loss_rec_mse_ze = tf.reduce_sum(tf.square(self.input_x - self.x_hat_e), axis=-1)
         loss_kl = - 0.5 * tf.reduce_sum(1 - tf.square(self.mu) - self.sigma_2 + tf.log(self.sigma_2), axis=-1)
-        vae_loss = loss_rec_mse_ze + loss_kl
+        vae_loss = tf.reduce_mean(loss_rec_mse_ze + loss_kl)
         loss_rec_mse = vae_loss
         tf.summary.scalar("loss_reconstruction", loss_rec_mse)
         return loss_rec_mse_ze
@@ -276,7 +268,7 @@ class VAE():
         with tf.variable_scope("optimize"):
             starter_learning_rate = 0.005
             learning_rate = tf.train.exponential_decay(starter_learning_rate, self.global_step,
-                                                       20, 0.9, staircase=True)
+                                                       50, 0.9, staircase=True)
             optimizer = tf.train.AdamOptimizer(learning_rate)
             # optimizer = tf.train.AdadeltaOptimizer()
             # optimizer = tf.train.GradientDescentOptimizer(learning_rate)

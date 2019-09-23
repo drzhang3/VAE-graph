@@ -26,16 +26,21 @@ def train(model, x_train, epochs, batch_size):
         sess.run(init)
         saver = tf.train.Saver()
         writer = tf.summary.FileWriter('.\logs', sess.graph)
-        for epoch in range(epochs):
-            temp_loss = []
-            for j in range(batch_num):
-                _, loss_ = sess.run([model.train_op, model.loss],
-                                    feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
-                temp_loss.append(loss_)
-            print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
-            loss_list.append(np.mean(temp_loss))
-        saver.save(sess, 'models\ckp')
-        summaries = tf.summary.merge_all()
+        try:
+            for epoch in range(epochs):
+                temp_loss = []
+                for j in range(batch_num):
+                    _, loss_ = sess.run([model.train_op, model.loss],
+                                        feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
+                    temp_loss.append(loss_)
+                if epoch % 2 == 0:
+                    print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
+                loss_list.append(np.mean(temp_loss))
+        except KeyboardInterrupt:
+            pass
+        finally:
+            saver.save(sess, 'models\ckp')
+            summaries = tf.summary.merge_all()
     return loss_list
 
 
@@ -114,7 +119,6 @@ def test(x_test):
         for i in range(batch_num//batch_size):
             prob = sess.run(prob_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
             probs.append(prob)
-
             # print(probs[i])
             plt.subplot(1, 3, 1)
             plt.imshow(probs[i], cmap="RdYlBu", vmin=-1, vmax=1, origin='low')

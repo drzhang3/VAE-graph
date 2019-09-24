@@ -183,10 +183,10 @@ class VAE():
         node_dim = self.z_dim
         node_state = self.z_e       # (node_num, node_dim)
         tf.add_to_collection("z_e", node_state)
-        # init_prob = tf.get_variable("prob", [node_num, node_num],
-        #                             initializer=tf.truncated_normal_initializer(stddev=0.05))
         self.init_prob = tf.get_variable("prob", [node_num, node_num],
-                                    initializer=tf.orthogonal_initializer())
+                                         initializer=tf.truncated_normal_initializer(stddev=0.05))
+        # self.init_prob = tf.get_variable("prob", [node_num, node_num],
+        #                                  initializer=tf.orthogonal_initializer())
         weight = tf.Variable(tf.random_normal([node_dim, node_dim], stddev=0.35), dtype=tf.float32)
         learning_matrix = tf.Variable(tf.random_normal([node_dim, node_num], stddev=0.35), dtype=tf.float32)
         print(weight.get_shape())
@@ -197,7 +197,7 @@ class VAE():
             h_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(self.init_prob, h_0), weight))     # (node_num, node_dim)
         h_0 = dense(h_0, node_dim)
         tf.add_to_collection("node_state", h_0)
-        loss = tf.reduce_sum(tf.square(self.init_prob - node_similarity(node_state)))
+        loss = 0.00005*tf.reduce_sum(tf.square(self.init_prob - node_similarity(node_state)))
         return h_0, loss       # (batch_size, z_dim)
         # # GNN  second stage
         # weight_adj = tf.Variable(tf.random_normal([node_num, node_num], stddev=0.35), dtype=tf.float32)

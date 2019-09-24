@@ -25,7 +25,7 @@ def train(model, x_train, epochs, batch_size):
         init = tf.global_variables_initializer()
         sess.run(init)
         saver = tf.train.Saver()
-        writer = tf.summary.FileWriter('.\logs', sess.graph)
+        # writer = tf.summary.FileWriter('.\logs', sess.graph)
         try:
             for epoch in range(epochs):
                 temp_loss = []
@@ -33,7 +33,7 @@ def train(model, x_train, epochs, batch_size):
                     _, loss_ = sess.run([model.train_op, model.loss],
                                         feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
                     temp_loss.append(loss_)
-                if epoch % 2 == 0:
+                if epoch % 10 == 0:
                     print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
                 loss_list.append(np.mean(temp_loss))
         except KeyboardInterrupt:
@@ -152,7 +152,7 @@ seq_len = 64
 step = 8
 z_dim = 8     # VAE hidden_state size
 hidden_dim = 8     # LSTM cell state size
-epochs = 50
+epochs = 200
 batch_size = 10
 decay_factor = 0.9
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]

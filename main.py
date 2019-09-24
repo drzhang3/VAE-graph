@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from sklearn.metrics import r2_score,mean_squared_error,mean_absolute_error,median_absolute_error
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error, median_absolute_error
 tf.reset_default_graph()
 
 
@@ -33,17 +33,23 @@ def train(model, x_train, epochs, batch_size):
         init = tf.global_variables_initializer()
         sess.run(init)
         saver = tf.train.Saver()
-        writer = tf.summary.FileWriter('.\logs', sess.graph)
-        for epoch in range(epochs):
-            temp_loss = []
-            for j in range(batch_num):
-                _, loss_ = sess.run([model.train_op, model.loss],
-                                    feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
-                temp_loss.append(loss_)
-            print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
-            loss_list.append(np.mean(temp_loss))
-        saver.save(sess, 'models\ckp')
         summaries = tf.summary.merge_all()
+        writer = tf.summary.FileWriter('.\logs', sess.graph)
+        try:
+            for epoch in range(epochs):
+                temp_loss = []
+                for j in range(batch_num):
+                    _, loss_ = sess.run([model.train_op, model.loss],
+                                        feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
+                    temp_loss.append(loss_)
+                if epoch % 10 == 0:
+                    print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
+                loss_list.append(np.mean(temp_loss))
+        except KeyboardInterrupt:
+            pass
+        finally:
+            saver.save(sess, 'models\ckp')
+
     return loss_list
 
 
@@ -56,7 +62,8 @@ def test(x_test):
         graph = tf.get_default_graph()
         input_x = graph.get_tensor_by_name("input_x:0")
         x_hat_e = graph.get_tensor_by_name("decoder_ze/result:0")
-        prob_ = graph.get_tensor_by_name("prob:0")
+        prob_ = graph.get_tensor_by_name("gcn/prob:0")
+        similarity_ = tf.get_collection("similarity")[0]
         node_state_ = tf.get_collection("node_state")[0]
         z_e_ = tf.get_collection("z_e")[0]
         # similarity = graph.get_tensor_by_name("similarity:0")
@@ -65,6 +72,7 @@ def test(x_test):
         for i in range(batch_num//batch_size):
             node_state = sess.run(node_state_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
             z_e = sess.run(z_e_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+
             print(node_state)
             # print(z_e)
             plt.subplot(1, 2, 1)
@@ -78,6 +86,18 @@ def test(x_test):
             plt.show()
             if i == 0:
                 break
+
+        similarity_list = []
+        for i in range(batch_num//batch_size):
+            similarity = sess.run(similarity_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+            similarity_list.append(similarity)
+
+        for i in range(4):
+            # print(similarity_list[0]==similarity_list[i])
+            plt.subplot(2, 2, i+1)
+            plt.imshow(similarity_list[i], cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+            plt.colorbar()
+        plt.show()
 
         # plt.ion()
         # for i in range(batch_num):
@@ -109,14 +129,21 @@ def test(x_test):
         for i in range(batch_num//batch_size):
             prob = sess.run(prob_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
             probs.append(prob)
-        #print(probs[0])
-        plt.subplot(1, 3, 1)
-        plt.imshow(probs[0], cmap="Greys", vmin=0, vmax=1, origin='low')
-        plt.subplot(1, 3, 2)
-        plt.imshow(binarization(probs[0]), cmap="Greys", vmin=0, vmax=1, origin='low')
-        plt.subplot(1, 3, 3)
-        plt.imshow(sigmoid(probs[0]), cmap="Greys", vmin=0, vmax=1, origin='low')
-        plt.show()
+            # print(probs[i])
+            plt.subplot(1, 3, 1)
+            plt.imshow(probs[i], cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+            plt.colorbar()
+            plt.subplot(1, 3, 2)
+            plt.imshow(binarization(probs[i]), cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+            plt.colorbar()
+            plt.subplot(1, 3, 3)
+            plt.imshow(sigmoid(probs[i]), cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+            plt.colorbar()
+            plt.show()
+            # print(probs[0]==probs[i])
+            if i == 0:
+                break
+
         # drawDAG(binarization(probs[0]))
         # print("k is ok")
         # fig = plt.figure()
@@ -131,17 +158,17 @@ def test(x_test):
         # ani.save("test.mp4", writer='imagemagick')
 
 
-seq_len = 32
-step = 2
-z_dim = 8     # VAE hidden_state size
-hidden_dim = 4     # LSTM cell state size
-epochs = 20
-batch_size = 8
+seq_len = 128
+step = 4
+z_dim = 16     # VAE hidden_state size
+hidden_dim = 8     # LSTM cell state size
+epochs = 1
+batch_size = 16
 decay_factor = 0.9
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]
 data2 = [np.sin(np.pi*i*0.02) for i in range(5000)]
-raw_data = [np.sin(np.pi * i * 0.04) for i in range(5000)]
-# raw_data = data1 + data2
+# raw_data = [np.sin(np.pi * i * 0.04) for i in range(5000)]
+raw_data = data1 + data2
 # raw_data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
 # raw_data = [(i-np.min(raw_data))/(np.max(raw_data)-np.min(raw_data)) for i in raw_data]
 # mask = mask_data(raw_data)
@@ -151,7 +178,7 @@ x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")
 # data = [(i-np.mean(data)/np.std(data)) for i in data]
 print(x_train.shape)
-model = VAE(z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim)
+model = VAE(batch_size=batch_size, z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim)
 loss = train(model, x_train, epochs, batch_size)
 plt.plot(loss)
 plt.savefig("./fig/loss.png")

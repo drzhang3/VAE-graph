@@ -172,6 +172,7 @@ class VAE():
     def get_loss(self):
         with tf.variable_scope("loss"):
             loss = self.loss_reconstruction() + self.loss_commitment() + self.loss_graph()
+            loss = tf.reduce_mean(loss, name='loss')
         tf.summary.scalar("loss", loss)
         return loss
 

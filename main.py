@@ -39,9 +39,10 @@ def train(model, x_train, epochs, batch_size):
             for epoch in range(epochs):
                 temp_loss = []
                 for j in range(batch_num):
-                    _, loss_ = sess.run([model.train_op, model.loss],
-                                        feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
+                    _, loss_, train_summaries = sess.run([model.train_op, model.loss, summaries],
+                                    feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
                     temp_loss.append(loss_)
+                    writer.add_summary(train_summaries, tf.train.global_step(sess, model.global_step))
                 if epoch % 10 == 0:
                     print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
                 loss_list.append(np.mean(temp_loss))
@@ -162,7 +163,7 @@ seq_len = 128
 step = 4
 z_dim = 16     # VAE hidden_state size
 hidden_dim = 8     # LSTM cell state size
-epochs = 1
+epochs = 100
 batch_size = 16
 decay_factor = 0.9
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]

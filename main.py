@@ -159,12 +159,12 @@ def test(x_test):
         # ani.save("test.mp4", writer='imagemagick')
 
 
-seq_len = 128
+seq_len = 64
 step = 4
-z_dim = 24     # VAE hidden_state size
+z_dim = 6     # VAE hidden_state size
 hidden_dim = 8     # LSTM cell state size
 epochs = 100
-batch_size = 16
+batch_size = 32
 decay_factor = 0.9
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]
 data2 = [np.sin(np.pi*i*0.02) for i in range(5000)]

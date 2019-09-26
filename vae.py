@@ -60,6 +60,7 @@ class VAE():
         # self.batch_size = tf.shape(self.input_x)[0]
         self.z_e, self.mu, self.sigma_2 = self.encoder()
         self.z_graph = self._graph()
+        self.position = self.position_embedding()
         self.attn = self.attention()
         # self.z_graph = self.z_e
         self.x_hat_e = self.decoder_ze()
@@ -125,8 +126,10 @@ class VAE():
 
     def attention(self):
         with tf.variable_scope("multi_head_attention", reuse=tf.AUTO_REUSE):
-            query = tf.expand_dims(self.z_e, 0)
-            key_value = tf.expand_dims(self.z_e, 0)
+            final_embedding = self.position + self.z_e
+            # final_embedding = self.z_e
+            query = tf.expand_dims(final_embedding, 0)
+            key_value = tf.expand_dims(final_embedding, 0)
             # (bs = 1, seq_len = batch_size, z_dim)
             # compute Q、K、V
             V = dense(key_value, units=self.embedding_size, use_bias=False, name='V')
@@ -139,31 +142,21 @@ class VAE():
             K = tf.concat(tf.split(K, self.multihead_num, axis=-1), axis=0)
             Q = tf.concat(tf.split(Q, self.multihead_num, axis=-1), axis=0)
             # (bs*head_num, seq_len, embedding_size/head_num)
-
-            # 计算Q、K的点积，并进行scale
             score = tf.matmul(Q, tf.transpose(K, [0, 2, 1])) / tf.sqrt(self.embedding_size / self.multihead_num)
             # (bs*head_num, seq_len, seq_len)
-
             # TODO : add mask
             # if score_mask is not None:
             #     score *= score_mask
             #     score += ((score_mask - 1) * 1e+9)
-
             # softmax
             softmax = tf.nn.softmax(score, axis=2)
             # (bs*head_num, seq_len, seq_len)
-
             # attention
             attention = tf.matmul(softmax, V)
             # (bs*head_num, seq_len, embedding_size/head_num)
-
-            # 将multi-head的输出进行拼接
             concat = tf.concat(tf.split(attention, self.multihead_num, axis=0), axis=-1)
             # (bs, seq_len, embedding_size)
-
-            # Linear
             Multihead = dense(concat, units=self.embedding_size, use_bias=False, name='linear')
-
             # output mask
             # TODO : add mask for output
             # if output_mask is not None:
@@ -175,6 +168,19 @@ class VAE():
             Multihead = tf.contrib.layers.layer_norm(Multihead, begin_norm_axis=2)
             Multihead = tf.reshape(Multihead, [-1, self.embedding_size])
         return Multihead
+
+    def position_embedding(self):
+        with tf.variable_scope("position_embedding"):
+            position_size = self.embedding_size
+            seq_len = tf.shape(self.z_e)[0]
+            position_j = 1. / tf.pow(10000., 2 * tf.range(position_size / 2, dtype=tf.float32) / position_size)
+            position_j = tf.expand_dims(position_j, 0)
+            position_i = tf.range(tf.cast(seq_len, tf.float32), dtype=tf.float32)
+            position_i = tf.expand_dims(position_i, 1)
+            position_ij = tf.matmul(position_i, position_j)
+            position_ij = tf.concat([tf.cos(position_ij), tf.sin(position_ij)], 1)
+            # (seq_len, embedding_size)
+        return position_ij
 
     def _graph(self):
         with tf.variable_scope("gcn", reuse=tf.AUTO_REUSE):
@@ -229,7 +235,7 @@ class VAE():
 
     def get_loss(self):
         with tf.variable_scope("loss"):
-            loss = self.loss_reconstruction() + self.loss_commitment() + self.loss_graph()
+            loss = self.loss_reconstruction() + self.loss_commitment()
             loss = tf.reduce_mean(loss, name='loss')
         tf.summary.scalar("loss", loss)
         return loss

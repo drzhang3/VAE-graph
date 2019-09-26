@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.python.layers.core import dense
 import numpy as np
+import copy
 
 
 def compute_similarity(node1, node2):
@@ -51,11 +52,15 @@ class VAE():
         self.seq_len = seq_len
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
+        self.multihead_num = 3
+        self.embedding_size = self.z_dim
+        self.keep_prob = 0.9
         self.input_x = tf.placeholder(shape=[self.batch_size, input_dim, seq_len], dtype=tf.float32, name="input_x")
         self.global_step = tf.Variable(0, trainable=False, name="global_step")
         # self.batch_size = tf.shape(self.input_x)[0]
         self.z_e, self.mu, self.sigma_2 = self.encoder()
         self.z_graph = self._graph()
+        self.attn = self.attention()
         # self.z_graph = self.z_e
         self.x_hat_e = self.decoder_ze()
         self.x_hat_q = self.decoder_zq()
@@ -84,7 +89,7 @@ class VAE():
 
     def decoder_ze(self):
         with tf.variable_scope("decoder_ze", reuse=tf.AUTO_REUSE):
-            h_3 = dense(self.z_e, 2*self.z_dim, activation=tf.nn.relu, name="h_3")
+            h_3 = dense(self.attn, 2*self.z_dim, activation=tf.nn.relu, name="h_3")
             h_4 = dense(h_3, self.seq_len, name="h_4")
             x_hat = tf.expand_dims(h_4, 1, name="result")
         return x_hat
@@ -117,6 +122,59 @@ class VAE():
             outputs = dense(outputs, self.z_dim)     # (1, hidden_dim)
             outputs =tf.reshape(outputs, [self.z_dim])
         return outputs
+
+    def attention(self):
+        with tf.variable_scope("multi_head_attention", reuse=tf.AUTO_REUSE):
+            query = tf.expand_dims(self.z_e, 0)
+            key_value = tf.expand_dims(self.z_e, 0)
+            # (bs = 1, seq_len = batch_size, z_dim)
+            # compute Q、K、V
+            V = dense(key_value, units=self.embedding_size, use_bias=False, name='V')
+            K = dense(key_value, units=self.embedding_size, use_bias=False, name='K')
+            Q = dense(query, units=self.embedding_size, use_bias=False, name='Q')
+            # (bs, seq_len, embedding_size)
+
+            # multi-heads
+            V = tf.concat(tf.split(V, self.multihead_num, axis=-1), axis=0)
+            K = tf.concat(tf.split(K, self.multihead_num, axis=-1), axis=0)
+            Q = tf.concat(tf.split(Q, self.multihead_num, axis=-1), axis=0)
+            # (bs*head_num, seq_len, embedding_size/head_num)
+
+            # 计算Q、K的点积，并进行scale
+            score = tf.matmul(Q, tf.transpose(K, [0, 2, 1])) / tf.sqrt(self.embedding_size / self.multihead_num)
+            # (bs*head_num, seq_len, seq_len)
+
+            # TODO : add mask
+            # if score_mask is not None:
+            #     score *= score_mask
+            #     score += ((score_mask - 1) * 1e+9)
+
+            # softmax
+            softmax = tf.nn.softmax(score, axis=2)
+            # (bs*head_num, seq_len, seq_len)
+
+            # attention
+            attention = tf.matmul(softmax, V)
+            # (bs*head_num, seq_len, embedding_size/head_num)
+
+            # 将multi-head的输出进行拼接
+            concat = tf.concat(tf.split(attention, self.multihead_num, axis=0), axis=-1)
+            # (bs, seq_len, embedding_size)
+
+            # Linear
+            Multihead = dense(concat, units=self.embedding_size, use_bias=False, name='linear')
+
+            # output mask
+            # TODO : add mask for output
+            # if output_mask is not None:
+            #     Multihead *= output_mask
+
+            Multihead = tf.nn.dropout(Multihead, keep_prob=self.keep_prob)
+            Multihead += query
+            # Layer Norm
+            Multihead = tf.contrib.layers.layer_norm(Multihead, begin_norm_axis=2)
+            Multihead = tf.reshape(Multihead, [-1, self.embedding_size])
+        return Multihead
 
     def _graph(self):
         with tf.variable_scope("gcn", reuse=tf.AUTO_REUSE):
@@ -159,7 +217,7 @@ class VAE():
 
     def loss_commitment(self):
         with tf.variable_scope("loss_commit"):
-            loss_commit = tf.reduce_mean(tf.squared_difference(self.z_e, self.z_graph))
+            loss_commit = tf.reduce_mean(tf.squared_difference(self.attn, self.z_graph))
         tf.summary.scalar("loss_commit", loss_commit)
         return loss_commit
 

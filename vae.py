@@ -65,8 +65,9 @@ class VAE():
         # self.z_graph = self.z_e
         self.x_hat_e = self.decoder_ze()
         self.x_hat_q = self.decoder_zq()
+        self.x_hat = self.decoder_z()
         self.loss = self.get_loss()
-        self.train_op = self.optimize().minimize(self.loss, self.global_step)
+        self.train_op = self.optimize()
 
     def global_state(self):
         embeddings = tf.get_variable("embeddings", [self.batch_size, self.batch_size]+[self.z_dim],
@@ -102,6 +103,13 @@ class VAE():
             x_hat = tf.expand_dims(h_4, 1, name='result')
         return x_hat
 
+    def decoder_z(self):
+        with tf.variable_scope("decoder_z", reuse=tf.AUTO_REUSE):
+            h_3 = dense(self.z_e, 2*self.z_dim, tf.nn.relu, name="h_3")
+            h_4 = dense(h_3, self.seq_len, name="h_4")
+            x_hat = tf.expand_dims(h_4, 1, name='result')
+        return x_hat
+
     def run_lstm_ze(self):
         with tf.variable_scope("run_lstm_ze", reuse=tf.AUTO_REUSE):
             z_e_x, z_e_y, num = get_z_e(self.z_graph)
@@ -121,7 +129,7 @@ class VAE():
             outputs, _ = tf.nn.dynamic_rnn(cell, input_lstm, dtype=tf.float32)    # (batch_size, seq_len, z_dim)
             outputs = tf.transpose(outputs, [1, 0, 2])[-1]     # (1 , z_dim)
             outputs = dense(outputs, self.z_dim)     # (1, hidden_dim)
-            outputs =tf.reshape(outputs, [self.z_dim])
+            outputs = tf.reshape(outputs, [self.z_dim])
         return outputs
 
     def attention(self):
@@ -167,6 +175,7 @@ class VAE():
             # Layer Norm
             Multihead = tf.contrib.layers.layer_norm(Multihead, begin_norm_axis=2)
             Multihead = tf.reshape(Multihead, [-1, self.embedding_size])
+            tf.add_to_collection("multi-head", Multihead)
         return Multihead
 
     def position_embedding(self):
@@ -180,6 +189,7 @@ class VAE():
             position_ij = tf.matmul(position_i, position_j)
             position_ij = tf.concat([tf.cos(position_ij), tf.sin(position_ij)], 1)
             # (seq_len, embedding_size)
+            tf.add_to_collection("position", position_ij)
         return position_ij
 
     def _graph(self):
@@ -196,7 +206,7 @@ class VAE():
                 tf.add_to_collection("similarity", similarity)
             with tf.name_scope("final_output"):
                 h_0 = tf.nn.sigmoid(tf.matmul(tf.matmul(self.init_prob, node_state), weight))     # (node_num, node_dim)
-                h_1 = tf.nn.sigmoid(tf.matmul(tf.matmul(self.init_prob, h_0), weight))
+                h_1 = tf.matmul(tf.matmul(self.init_prob, h_0), weight)
                 tf.add_to_collection("node_state", h_1)
             # loss = 0.00005*tf.reduce_sum(tf.square(self.init_prob - node_similarity(node_state)), name="w_loss")
         return h_1    # (batch_size, z_dim)
@@ -214,16 +224,21 @@ class VAE():
             with tf.name_scope("zq_loss"):
                 loss_rec_mse_zq = tf.reduce_sum(tf.square(self.input_x-self.x_hat_q))
             with tf.name_scope("vae_loss"):
-                loss_rec_mse_ze = tf.reduce_sum(tf.square(self.input_x-self.x_hat_e), axis=-1)
+                loss_rec_mse_z = tf.reduce_sum(tf.square(self.input_x-self.x_hat), axis=-1)
                 loss_kl = - 0.5 * tf.reduce_sum(1-tf.square(self.mu)-self.sigma_2+tf.log(self.sigma_2), axis=-1)
-                vae_loss = tf.reduce_mean(loss_rec_mse_ze + loss_kl, name="vae_loss")
-            loss_rec_mse = vae_loss + loss_rec_mse_zq
+                vae_loss = tf.reduce_mean(loss_rec_mse_z + loss_kl, name="vae_loss")
+            with tf.name_scope("ze_loss"):
+                loss_rec_mse_ze = tf.reduce_sum(tf.square(self.input_x-self.x_hat_e))
+        loss_rec_mse = vae_loss + loss_rec_mse_zq + loss_rec_mse_ze
         tf.summary.scalar("loss_reconstruction", loss_rec_mse)
         return loss_rec_mse_ze
 
     def loss_commitment(self):
         with tf.variable_scope("loss_commit"):
-            loss_commit = tf.reduce_mean(tf.squared_difference(self.attn, self.z_graph))
+            # loss_commit = tf.reduce_mean(tf.squared_difference(self.attn, self.z_graph))
+            loss_commit1 = tf.reduce_mean(tf.squared_difference(self.z_e, self.z_graph))
+            loss_commit2 = tf.reduce_mean(tf.squared_difference(self.z_e, self.attn))
+            loss_commit = loss_commit1 + loss_commit2
         tf.summary.scalar("loss_commit", loss_commit)
         return loss_commit
 
@@ -234,9 +249,10 @@ class VAE():
         return loss_graph
 
     def get_loss(self):
-        with tf.variable_scope("loss"):
-            loss = self.loss_reconstruction() + self.loss_commitment()
-            loss = tf.reduce_mean(loss, name='loss')
+        with tf.variable_scope("total_loss"):
+            with tf.name_scope("loss"):
+                loss = self.loss_reconstruction() + self.loss_commitment()
+                loss = tf.reduce_mean(loss, name='loss')
         tf.summary.scalar("loss", loss)
         return loss
 
@@ -246,5 +262,7 @@ class VAE():
             learning_rate = tf.train.exponential_decay(starter_learning_rate, self.global_step,
                                                        50, 0.9, staircase=True)
             optimizer = tf.train.AdamOptimizer(learning_rate)
-            # optimizer = tf.train.AdadeltaOptimizer()
-        return optimizer
+            grads, variables = zip(*optimizer.compute_gradients(self.loss))
+            grads, global_norm = tf.clip_by_global_norm(grads, 5)
+            train_op = optimizer.apply_gradients(zip(grads, variables), global_step=self.global_step)
+        return train_op

@@ -66,6 +66,8 @@ def test(x_test):
         prob_ = graph.get_tensor_by_name("gcn/prob:0")
         similarity_ = tf.get_collection("similarity")[0]
         node_state_ = tf.get_collection("node_state")[0]
+        multi_head_ = tf.get_collection("multi-head")[0]
+        position_ = tf.get_collection("position")[0]
         z_e_ = tf.get_collection("z_e")[0]
         # similarity = graph.get_tensor_by_name("similarity:0")
         print("variable is ready")
@@ -73,16 +75,25 @@ def test(x_test):
         for i in range(batch_num//batch_size):
             node_state = sess.run(node_state_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
             z_e = sess.run(z_e_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+            multi_head = sess.run(multi_head_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+            position = sess.run(position_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
 
-            print(node_state)
             # print(z_e)
-            plt.subplot(1, 2, 1)
-            plt.title("state after GCN")
-            plt.imshow(node_state, cmap="RdYlBu", vmin=0, vmax=1, origin='low')
+            plt.subplot(2, 2, 1)
+            plt.title("raw_state:z_e")
+            plt.imshow(z_e, cmap="RdYlBu", aspect='auto', vmin=0, vmax=1, origin='low')
             plt.colorbar()
-            plt.subplot(1, 2, 2)
-            plt.title("state before GCN")
-            plt.imshow(z_e, cmap="RdYlBu", vmin=0, vmax=1, origin='low')
+            plt.subplot(2, 2, 2)
+            plt.title("GCN state")
+            plt.imshow(node_state, cmap="RdYlBu", aspect='auto', vmin=0, vmax=1, origin='low')
+            plt.colorbar()
+            plt.subplot(2, 2, 3)
+            plt.title("attention state")
+            plt.imshow(multi_head, cmap="RdYlBu", aspect='auto', vmin=0, vmax=1, origin='low')
+            plt.colorbar()
+            plt.subplot(2, 2, 4)
+            plt.title("position state")
+            plt.imshow(position, cmap="RdYlBu", aspect='auto', vmin=0, vmax=1, origin='low')
             plt.colorbar()
             plt.show()
             if i == 0:
@@ -159,17 +170,23 @@ def test(x_test):
         # ani.save("test.mp4", writer='imagemagick')
 
 
-seq_len = 64
+seq_len = 32
 step = 4
-z_dim = 6     # VAE hidden_state size
-hidden_dim = 8     # LSTM cell state size
-epochs = 100
-batch_size = 32
+z_dim = 24     # VAE hidden_state size
+hidden_dim = 20     # LSTM cell state size
+epochs = 1000
+batch_size = 128
 decay_factor = 0.9
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]
 data2 = [np.sin(np.pi*i*0.02) for i in range(5000)]
 # raw_data = [np.sin(np.pi * i * 0.04) for i in range(5000)]
 raw_data = data1 + data2
+# data1 = [np.sin(np.pi*i*0.04) for i in range(100)]
+# data2 = [np.sin(np.pi*i*0.02) for i in range(100)]
+# data = data1 + data2
+# raw_data = []
+# for i in range(50):
+#     raw_data.extend(data)
 # raw_data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
 # raw_data = [(i-np.min(raw_data))/(np.max(raw_data)-np.min(raw_data)) for i in raw_data]
 # mask = mask_data(raw_data)

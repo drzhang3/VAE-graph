@@ -62,54 +62,55 @@ def test(x_test):
         saver.restore(sess, tf.train.latest_checkpoint('models'))
         graph = tf.get_default_graph()
         input_x = graph.get_tensor_by_name("input_x:0")
-        x_hat_e = graph.get_tensor_by_name("decoder_ze/result:0")
-        prob_ = graph.get_tensor_by_name("gcn/prob:0")
-        similarity_ = tf.get_collection("similarity")[0]
-        node_state_ = tf.get_collection("node_state")[0]
-        multi_head_ = tf.get_collection("multi-head")[0]
-        position_ = tf.get_collection("position")[0]
-        z_e_ = tf.get_collection("z_e")[0]
+        # x_hat_e = graph.get_tensor_by_name("decoder_ze/result:0")
+        x_hat_ = graph.get_tensor_by_name("decoder_z/result:0")
+        # prob_ = graph.get_tensor_by_name("gcn/prob:0")
+        # similarity_ = tf.get_collection("similarity")[0]
+        # node_state_ = tf.get_collection("node_state")[0]
+        # multi_head_ = tf.get_collection("multi-head")[0]
+        # position_ = tf.get_collection("position")[0]
+        #z_e_ = tf.get_collection("z_e")[0]
         # similarity = graph.get_tensor_by_name("similarity:0")
         print("variable is ready")
 
-        for i in range(batch_num//batch_size):
-            node_state = sess.run(node_state_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
-            z_e = sess.run(z_e_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
-            multi_head = sess.run(multi_head_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
-            position = sess.run(position_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+        # for i in range(batch_num//batch_size):
+        #     node_state = sess.run(node_state_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+        #     z_e = sess.run(z_e_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+        #     multi_head = sess.run(multi_head_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+        #     position = sess.run(position_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+        #
+        #     # print(z_e)
+        #     plt.subplot(2, 2, 1)
+        #     plt.title("raw_state:z_e")
+        #     plt.imshow(z_e, cmap="RdYlBu", aspect='auto', vmin=0, vmax=1, origin='low')
+        #     plt.colorbar()
+        #     plt.subplot(2, 2, 2)
+        #     plt.title("GCN state")
+        #     plt.imshow(node_state, cmap="RdYlBu", aspect='auto', vmin=0, vmax=1, origin='low')
+        #     plt.colorbar()
+        #     plt.subplot(2, 2, 3)
+        #     plt.title("attention state")
+        #     plt.imshow(multi_head, cmap="RdYlBu", aspect='auto', vmin=0, vmax=1, origin='low')
+        #     plt.colorbar()
+        #     plt.subplot(2, 2, 4)
+        #     plt.title("position state")
+        #     plt.imshow(position, cmap="RdYlBu", aspect='auto', vmin=0, vmax=1, origin='low')
+        #     plt.colorbar()
+        #     plt.show()
+        #     if i == 0:
+        #         break
 
-            # print(z_e)
-            plt.subplot(2, 2, 1)
-            plt.title("raw_state:z_e")
-            plt.imshow(z_e, cmap="RdYlBu", aspect='auto', vmin=0, vmax=1, origin='low')
-            plt.colorbar()
-            plt.subplot(2, 2, 2)
-            plt.title("GCN state")
-            plt.imshow(node_state, cmap="RdYlBu", aspect='auto', vmin=0, vmax=1, origin='low')
-            plt.colorbar()
-            plt.subplot(2, 2, 3)
-            plt.title("attention state")
-            plt.imshow(multi_head, cmap="RdYlBu", aspect='auto', vmin=0, vmax=1, origin='low')
-            plt.colorbar()
-            plt.subplot(2, 2, 4)
-            plt.title("position state")
-            plt.imshow(position, cmap="RdYlBu", aspect='auto', vmin=0, vmax=1, origin='low')
-            plt.colorbar()
-            plt.show()
-            if i == 0:
-                break
+        # similarity_list = []
+        # for i in range(batch_num//batch_size):
+        #     similarity = sess.run(similarity_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+        #     similarity_list.append(similarity)
 
-        similarity_list = []
-        for i in range(batch_num//batch_size):
-            similarity = sess.run(similarity_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
-            similarity_list.append(similarity)
-
-        for i in range(4):
-            # print(similarity_list[0]==similarity_list[i])
-            plt.subplot(2, 2, i+1)
-            plt.imshow(similarity_list[i], cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
-            plt.colorbar()
-        plt.show()
+        # for i in range(4):
+        #     # print(similarity_list[0]==similarity_list[i])
+        #     plt.subplot(2, 2, i+1)
+        #     plt.imshow(similarity_list[i], cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+        #     plt.colorbar()
+        # plt.show()
 
         # plt.ion()
         # for i in range(batch_num):
@@ -127,7 +128,7 @@ def test(x_test):
         #     break
 
         for i in range(batch_num):
-            x_hat_e = sess.run(x_hat_e, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+            x_hat_e = sess.run(x_hat_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
             # print(np.shape(x_test[0:1][0,0,:]))
             evaluation(x_hat_e[0, 0, :], x_test[0:1][0, 0, :])
             plt.plot(x_hat_e[0, 0, :], label='reconstruction')
@@ -137,24 +138,24 @@ def test(x_test):
             if i == 0:
                 break
 
-        probs = []
-        for i in range(batch_num//batch_size):
-            prob = sess.run(prob_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
-            probs.append(prob)
-            # print(probs[i])
-            plt.subplot(1, 3, 1)
-            plt.imshow(probs[i], cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
-            plt.colorbar()
-            plt.subplot(1, 3, 2)
-            plt.imshow(binarization(probs[i]), cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
-            plt.colorbar()
-            plt.subplot(1, 3, 3)
-            plt.imshow(sigmoid(probs[i]), cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
-            plt.colorbar()
-            plt.show()
-            # print(probs[0]==probs[i])
-            if i == 0:
-                break
+        # probs = []
+        # for i in range(batch_num//batch_size):
+        #     prob = sess.run(prob_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+        #     probs.append(prob)
+        #     # print(probs[i])
+        #     plt.subplot(1, 3, 1)
+        #     plt.imshow(probs[i], cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+        #     plt.colorbar()
+        #     plt.subplot(1, 3, 2)
+        #     plt.imshow(binarization(probs[i]), cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+        #     plt.colorbar()
+        #     plt.subplot(1, 3, 3)
+        #     plt.imshow(sigmoid(probs[i]), cmap="RdYlBu", vmin=-1, vmax=1, origin='low')
+        #     plt.colorbar()
+        #     plt.show()
+        #     # print(probs[0]==probs[i])
+        #     if i == 0:
+        #         break
 
         # drawDAG(binarization(probs[0]))
         # print("k is ok")
@@ -170,17 +171,17 @@ def test(x_test):
         # ani.save("test.mp4", writer='imagemagick')
 
 
-seq_len = 32
+seq_len = 128
 step = 4
-z_dim = 24     # VAE hidden_state size
-hidden_dim = 20     # LSTM cell state size
+z_dim = 16     # VAE hidden_state size
+hidden_dim = 10     # LSTM cell state size
 epochs = 1000
-batch_size = 128
+batch_size = 32
 decay_factor = 0.9
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]
 data2 = [np.sin(np.pi*i*0.02) for i in range(5000)]
 # raw_data = [np.sin(np.pi * i * 0.04) for i in range(5000)]
-raw_data = data1 + data2
+raw_data = data1
 # data1 = [np.sin(np.pi*i*0.04) for i in range(100)]
 # data2 = [np.sin(np.pi*i*0.02) for i in range(100)]
 # data = data1 + data2
@@ -189,8 +190,8 @@ raw_data = data1 + data2
 #     raw_data.extend(data)
 # raw_data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
 # raw_data = [(i-np.min(raw_data))/(np.max(raw_data)-np.min(raw_data)) for i in raw_data]
-# mask = mask_data(raw_data)
-mask = raw_data
+mask = mask_data(raw_data)
+# mask = raw_data
 x_train, y_train = get_train_data(mask, seq_len, step)
 x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")

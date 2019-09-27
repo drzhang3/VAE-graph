@@ -58,13 +58,16 @@ class VAE():
         self.input_x = tf.placeholder(shape=[self.batch_size, input_dim, seq_len], dtype=tf.float32, name="input_x")
         self.global_step = tf.Variable(0, trainable=False, name="global_step")
         # self.batch_size = tf.shape(self.input_x)[0]
-        self.z_e, self.mu, self.sigma_2 = self.encoder()
-        self.z_graph = self._graph()
-        self.position = self.position_embedding()
-        self.attn = self.attention()
+        # self.z_e, self.mu, self.sigma_2 = self.encoder()
+        self.r_t_1, self.r_t_2, self.mu_, self.sigma_2_ = self.spike_vae()
+        self.c_t = self.bernoulli()
+        self.spike_z = self.spike_z()
+        # self.z_graph = self._graph()
+        # self.position = self.position_embedding()
+        # self.attn = self.attention()
         # self.z_graph = self.z_e
-        self.x_hat_e = self.decoder_ze()
-        self.x_hat_q = self.decoder_zq()
+        # self.x_hat_e = self.decoder_ze()
+        # self.x_hat_q = self.decoder_zq()
         self.x_hat = self.decoder_z()
         self.loss = self.get_loss()
         self.train_op = self.optimize()
@@ -89,6 +92,40 @@ class VAE():
             z_e = tf.add(mu, sigma * epsilon, name="z_e")
         return z_e, mu, sigma_2
 
+    def spike_vae(self):
+        with tf.variable_scope("spike_encoder", reuse=tf.AUTO_REUSE):
+            h_1 = dense(self.input_x, 2 * self.z_dim, activation=tf.nn.relu, name="h_1")
+            h_2 = dense(h_1, self.z_dim, activation=tf.nn.relu, name="h_2")
+            mu = dense(h_2, self.z_dim, name="mu")
+            log_sigma_2 = dense(h_2, self.z_dim, name="log_sigma_2")
+            sigma_2 = tf.exp(log_sigma_2)
+            mu = tf.reshape(mu, shape=[-1, self.z_dim], name="mu")
+            sigma_2 = tf.reshape(sigma_2, shape=[-1, self.z_dim], name="sigma_2")
+            sigma = tf.sqrt(sigma_2, name="sigma")
+            epsilon_1 = tf.random_normal(shape=tf.shape(sigma), name="epsilon1")
+            epsilon_2 = tf.random_normal(shape=tf.shape(sigma), name="epsilon2")
+            r_t_1 = sigma * epsilon_1 / 10
+            r_t_2 = mu + sigma * epsilon_2
+        return r_t_1, r_t_2, mu, sigma_2
+
+    def bernoulli(self):
+        with tf.variable_scope("bernoulli", reuse=tf.AUTO_REUSE):
+            h_1 = dense(self.input_x, 2 * self.z_dim, activation=tf.nn.relu, name="h_1")
+            h_2 = dense(h_1, self.z_dim, activation=tf.nn.sigmoid, name="h_2")
+            c_t = tf.reshape(h_2, shape=[-1, self.z_dim], name="mu")
+            epsilon = tf.random.uniform(shape=tf.shape(c_t), minval=0, maxval=1,name="epsilon")
+            c_t = tf.nn.sigmoid(tf.log(epsilon + 1e-20) - tf.log(1 - epsilon + 1e-20) + tf.log(c_t) + tf.log(1 - c_t))
+        return c_t
+
+    def spike_z(self):
+        with tf.variable_scope("s_t", reuse=tf.AUTO_REUSE):
+            s_t = tf.multiply(1-self.c_t, self.r_t_1) + tf.multiply(self.c_t, self.r_t_2)
+        return s_t
+
+    def spike_kl_loss(self):
+
+        return loss_kl
+
     def decoder_ze(self):
         with tf.variable_scope("decoder_ze", reuse=tf.AUTO_REUSE):
             h_3 = dense(self.attn, 2*self.z_dim, activation=tf.nn.relu, name="h_3")
@@ -105,7 +142,7 @@ class VAE():
 
     def decoder_z(self):
         with tf.variable_scope("decoder_z", reuse=tf.AUTO_REUSE):
-            h_3 = dense(self.z_e, 2*self.z_dim, tf.nn.relu, name="h_3")
+            h_3 = dense(self.spike_z, 2*self.z_dim, tf.nn.relu, name="h_3")
             h_4 = dense(h_3, self.seq_len, name="h_4")
             x_hat = tf.expand_dims(h_4, 1, name='result')
         return x_hat
@@ -221,17 +258,22 @@ class VAE():
 
     def loss_reconstruction(self):
         with tf.variable_scope("loss_reconstruction"):
-            with tf.name_scope("zq_loss"):
-                loss_rec_mse_zq = tf.reduce_sum(tf.square(self.input_x-self.x_hat_q))
+            # with tf.name_scope("zq_loss"):
+            #     loss_rec_mse_zq = tf.reduce_sum(tf.square(self.input_x-self.x_hat_q))
             with tf.name_scope("vae_loss"):
                 loss_rec_mse_z = tf.reduce_sum(tf.square(self.input_x-self.x_hat), axis=-1)
-                loss_kl = - 0.5 * tf.reduce_sum(1-tf.square(self.mu)-self.sigma_2+tf.log(self.sigma_2), axis=-1)
-                vae_loss = tf.reduce_mean(loss_rec_mse_z + loss_kl, name="vae_loss")
-            with tf.name_scope("ze_loss"):
-                loss_rec_mse_ze = tf.reduce_sum(tf.square(self.input_x-self.x_hat_e))
-        loss_rec_mse = vae_loss + loss_rec_mse_zq + loss_rec_mse_ze
+                elbo_c = -tf.reduce_sum(-tf.log(2.0)-self.c_t*tf.log(self.c_t+1e-20)-(1.0-self.c_t)*tf.log(
+                            1.0-self.c_t+1e-20), axis=-1)
+                elbo_r1 = -0.5*tf.reduce_sum(1.0-100*tf.square(self.mu_)-self.sigma_2_+tf.log(self.sigma_2_), axis=-1)
+                elbo_r2 = -0.5*tf.reduce_sum(1.0-tf.square(self.mu_)-self.sigma_2_+tf.log(self.sigma_2_), axis=-1)
+                loss_kl = elbo_c + elbo_r1 + elbo_r2
+                # loss_kl = - 0.5*tf.reduce_sum(1.0-tf.square(self.mu_)-self.sigma_2_+tf.log(self.sigma_2_), axis=-1)
+                vae_loss = tf.reduce_mean(loss_rec_mse_z, name="vae_loss")
+            # with tf.name_scope("ze_loss"):
+            #     loss_rec_mse_ze = tf.reduce_sum(tf.square(self.input_x-self.x_hat_e))
+        loss_rec_mse = vae_loss
         tf.summary.scalar("loss_reconstruction", loss_rec_mse)
-        return loss_rec_mse_ze
+        return loss_rec_mse
 
     def loss_commitment(self):
         with tf.variable_scope("loss_commit"):
@@ -250,9 +292,8 @@ class VAE():
 
     def get_loss(self):
         with tf.variable_scope("total_loss"):
-            with tf.name_scope("loss"):
-                loss = self.loss_reconstruction() + self.loss_commitment()
-                loss = tf.reduce_mean(loss, name='loss')
+            loss = self.loss_reconstruction()
+            loss = tf.reduce_mean(loss, name='loss')
         tf.summary.scalar("loss", loss)
         return loss
 
@@ -260,9 +301,10 @@ class VAE():
         with tf.variable_scope("optimize"):
             starter_learning_rate = 0.005
             learning_rate = tf.train.exponential_decay(starter_learning_rate, self.global_step,
-                                                       50, 0.9, staircase=True)
+                                                       20, 0.9, staircase=True)
             optimizer = tf.train.AdamOptimizer(learning_rate)
             grads, variables = zip(*optimizer.compute_gradients(self.loss))
-            grads, global_norm = tf.clip_by_global_norm(grads, 5)
+            grads, global_norm = tf.clip_by_global_norm(grads, 1)
             train_op = optimizer.apply_gradients(zip(grads, variables), global_step=self.global_step)
+            # train_op = optimizer.minimize(self.loss, self.global_step)
         return train_op

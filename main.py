@@ -173,7 +173,7 @@ def test(x_test):
 
 seq_len = 128
 step = 4
-z_dim = 16     # VAE hidden_state size
+z_dim = 18     # VAE hidden_state size
 hidden_dim = 10     # LSTM cell state size
 epochs = 1000
 batch_size = 32
@@ -190,8 +190,8 @@ raw_data = data1
 #     raw_data.extend(data)
 # raw_data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
 # raw_data = [(i-np.min(raw_data))/(np.max(raw_data)-np.min(raw_data)) for i in raw_data]
-mask = mask_data(raw_data)
-# mask = raw_data
+# mask = mask_data(raw_data)
+mask = raw_data
 x_train, y_train = get_train_data(mask, seq_len, step)
 x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")

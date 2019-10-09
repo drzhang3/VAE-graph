@@ -62,12 +62,13 @@ class VAE():
         self.r_t_1, self.r_t_2, self.mu_, self.sigma_2_ = self.spike_vae()
         self.c_t = self.bernoulli()
         self.spike_z = self.spike_z()
-        # self.z_graph = self._graph()
-        # self.position = self.position_embedding()
-        # self.attn = self.attention()
+        self.z_e = self.spike_z
+        self.z_graph = self._graph()
+        self.position = self.position_embedding()
+        self.attn = self.attention()
         # self.z_graph = self.z_e
-        # self.x_hat_e = self.decoder_ze()
-        # self.x_hat_q = self.decoder_zq()
+        self.x_hat_e = self.decoder_ze()
+        self.x_hat_q = self.decoder_zq()
         self.x_hat = self.decoder_z()
         self.loss = self.get_loss()
         self.train_op = self.optimize()
@@ -235,8 +236,7 @@ class VAE():
             node_dim = self.z_dim
             node_state = self.z_e       # (node_num, node_dim)
             tf.add_to_collection("z_e", node_state)
-            self.init_prob = tf.get_variable("prob", [node_num, node_num],
-                                             initializer=tf.orthogonal_initializer())
+            self.init_prob = tf.get_variable("prob", [node_num, node_num], initializer=tf.truncated_normal_initializer())
             weight = tf.Variable(tf.random_normal([node_dim, node_dim], stddev=0.35), dtype=tf.float32, name="weight")
             with tf.name_scope("similarity"):
                 similarity = node_similarity(node_state)
@@ -258,8 +258,8 @@ class VAE():
 
     def loss_reconstruction(self):
         with tf.variable_scope("loss_reconstruction"):
-            # with tf.name_scope("zq_loss"):
-            #     loss_rec_mse_zq = tf.reduce_sum(tf.square(self.input_x-self.x_hat_q))
+            with tf.name_scope("zq_loss"):
+                loss_rec_mse_zq = tf.reduce_sum(tf.square(self.input_x-self.x_hat_q))
             with tf.name_scope("vae_loss"):
                 loss_rec_mse_z = tf.reduce_sum(tf.square(self.input_x-self.x_hat), axis=-1)
                 elbo_c = -tf.reduce_sum(-tf.log(2.0)-self.c_t*tf.log(self.c_t+1e-20)-(1.0-self.c_t)*tf.log(
@@ -269,9 +269,9 @@ class VAE():
                 loss_kl = elbo_c + elbo_r1 + elbo_r2
                 # loss_kl = - 0.5*tf.reduce_sum(1.0-tf.square(self.mu_)-self.sigma_2_+tf.log(self.sigma_2_), axis=-1)
                 vae_loss = tf.reduce_mean(loss_rec_mse_z, name="vae_loss")
-            # with tf.name_scope("ze_loss"):
-            #     loss_rec_mse_ze = tf.reduce_sum(tf.square(self.input_x-self.x_hat_e))
-        loss_rec_mse = vae_loss
+            with tf.name_scope("ze_loss"):
+                loss_rec_mse_ze = tf.reduce_sum(tf.square(self.input_x-self.x_hat_e))
+        loss_rec_mse = vae_loss + loss_rec_mse_zq + loss_rec_mse_ze
         tf.summary.scalar("loss_reconstruction", loss_rec_mse)
         return loss_rec_mse
 
@@ -292,7 +292,7 @@ class VAE():
 
     def get_loss(self):
         with tf.variable_scope("total_loss"):
-            loss = self.loss_reconstruction()
+            loss = self.loss_reconstruction() + self.loss_commitment()
             loss = tf.reduce_mean(loss, name='loss')
         tf.summary.scalar("loss", loss)
         return loss
@@ -304,7 +304,7 @@ class VAE():
                                                        20, 0.9, staircase=True)
             optimizer = tf.train.AdamOptimizer(learning_rate)
             grads, variables = zip(*optimizer.compute_gradients(self.loss))
-            grads, global_norm = tf.clip_by_global_norm(grads, 1)
+            grads, global_norm = tf.clip_by_global_norm(grads, 5)
             train_op = optimizer.apply_gradients(zip(grads, variables), global_step=self.global_step)
             # train_op = optimizer.minimize(self.loss, self.global_step)
         return train_op

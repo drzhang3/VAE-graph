@@ -36,6 +36,19 @@ def train(model, x_train, epochs, batch_size):
         summaries = tf.summary.merge_all()
         writer = tf.summary.FileWriter('.\logs', sess.graph)
         try:
+            print('VAE pre_training ...')
+            for epoch in range(30):
+                temp_loss = []
+                for j in range(batch_num):
+                    _, loss_, train_summaries = sess.run([model.train_vae, model.loss_vae, summaries],
+                                    feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
+                    temp_loss.append(loss_)
+                    writer.add_summary(train_summaries, tf.train.global_step(sess, model.global_step))
+                if epoch % 10 == 0:
+                    print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
+                loss_list.append(np.mean(temp_loss))
+
+            print('training ...')
             for epoch in range(epochs):
                 temp_loss = []
                 for j in range(batch_num):
@@ -46,6 +59,7 @@ def train(model, x_train, epochs, batch_size):
                 if epoch % 10 == 0:
                     print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
                 loss_list.append(np.mean(temp_loss))
+
         except KeyboardInterrupt:
             pass
         finally:
@@ -178,6 +192,12 @@ hidden_dim = 10     # LSTM cell state size
 epochs = 1000
 batch_size = 32
 decay_factor = 0.9
+alpha = 1
+beta = 1
+gamma = 1
+eta = 1
+kappa = 1
+theta = 1
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]
 data2 = [np.sin(np.pi*i*0.02) for i in range(5000)]
 # raw_data = [np.sin(np.pi * i * 0.04) for i in range(5000)]
@@ -197,7 +217,8 @@ x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")
 # data = [(i-np.mean(data)/np.std(data)) for i in data]
 print(x_train.shape)
-model = VAE(batch_size=batch_size, z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim)
+model = VAE(batch_size=batch_size, z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim,
+            alpha=alpha, beta=beta, gamma=gamma, eta=eta, kappa=kappa, theta=theta)
 loss = train(model, x_train, epochs, batch_size)
 plt.plot(loss)
 plt.savefig("./fig/loss.png")

@@ -1,9 +1,34 @@
+import functools
 import tensorflow as tf
 from tensorflow.python.layers.core import dense
+from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
 import numpy as np
-import copy
 
 
+def lazy_scope(function):
+    """Creates a decorator for methods that makes their return values load lazily.
+
+    A method with this decorator will only compute the return value once when called
+    for the first time. Afterwards, the value will be cached as an object attribute.
+    Inspired by: https://danijar.com/structuring-your-tensorflow-models
+
+    Args:
+        function (func): Function to be decorated.
+
+    Returns:
+        decorator: Decorator for the function.
+    """
+    attribute = "_cache_" + function.__name__
+
+    @property
+    @functools.wraps(function)
+    def decorator(self):
+        if not hasattr(self, attribute):
+            with tf.variable_scope(function.__name__):
+                setattr(self, attribute, function(self))
+        return getattr(self, attribute)
+
+    return decorator
 def compute_similarity(node1, node2):
     temp = np.multiply(node1, node2)
     return np.sum(temp)/(np.sum(node1)*np.sum(node2))
@@ -46,7 +71,7 @@ def compute_ts_complexity(ts):
     return cid_ce(ts)
 
 class VAE():
-    def __init__(self, batch_size, z_dim, seq_len, input_dim, hidden_dim):
+    def __init__(self, batch_size, z_dim, seq_len, input_dim, hidden_dim, alpha, beta, gamma, eta, kappa, theta):
         self.batch_size = batch_size
         self.z_dim = z_dim
         self.seq_len = seq_len
@@ -55,6 +80,13 @@ class VAE():
         self.multihead_num = 3
         self.embedding_size = self.z_dim
         self.keep_prob = 0.9
+        self.dropout = 0.5
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+        self.eta = eta
+        self.kappa = kappa
+        self.theta = theta
         self.input_x = tf.placeholder(shape=[self.batch_size, input_dim, seq_len], dtype=tf.float32, name="input_x")
         self.global_step = tf.Variable(0, trainable=False, name="global_step")
         # self.batch_size = tf.shape(self.input_x)[0]
@@ -71,7 +103,7 @@ class VAE():
         self.x_hat_q = self.decoder_zq()
         self.x_hat = self.decoder_z()
         self.loss = self.get_loss()
-        self.train_op = self.optimize()
+        self.train_vae, self.train_op = self.optimize()
 
     def global_state(self):
         embeddings = tf.get_variable("embeddings", [self.batch_size, self.batch_size]+[self.z_dim],
@@ -81,41 +113,62 @@ class VAE():
 
     def encoder(self):
         with tf.variable_scope("encoder"):
-            h_1 = dense(self.input_x, 2*self.z_dim, activation=tf.nn.relu, name="h_1")
-            h_2 = dense(h_1, self.z_dim, activation=tf.nn.relu, name="h_2")
-            mu = dense(h_2, self.z_dim, name="mu")
-            log_sigma_2 = dense(h_2, self.z_dim, name="log_sigma_2")
-            sigma_2 = tf.exp(log_sigma_2)
-            mu = tf.reshape(mu, shape=[-1, self.z_dim], name="mu")
-            sigma_2 = tf.reshape(sigma_2, shape=[-1, self.z_dim], name="sigma_2")
-            sigma = tf.sqrt(sigma_2, name="sigma")
+            h_1 = Dense(2 * self.z_dim, activation=tf.nn.leaky_relu)(self.input_x)
+            h_1 = Dropout(rate=self.dropout)(h_1)
+            h_1 = BatchNormalization()(h_1)
+            h_2 = Dense(self.z_dim, activation=tf.nn.leaky_relu)(h_1)
+            h_2 = Dropout(rate=self.dropout)(h_2)
+            h_2 = BatchNormalization()(h_2)
+            with tf.name_scope("mu"):
+                mu = Dense(self.z_dim)(h_2)
+                mu = tf.reshape(mu, shape=[-1, self.z_dim])
+            with tf.name_scope("sigma"):
+                log_sigma_2 = Dense(self.z_dim)(h_2)
+                sigma_2 = tf.exp(log_sigma_2)
+                sigma_2 = tf.reshape(sigma_2, shape=[-1, self.z_dim])
+                sigma = tf.sqrt(sigma_2)
             epsilon = tf.random_normal(shape=tf.shape(sigma), name="epsilon")
-            z_e = tf.add(mu, sigma * epsilon, name="z_e")
+            with tf.name_scope("z_e"):
+                z_e = mu + sigma * epsilon
         return z_e, mu, sigma_2
 
     def spike_vae(self):
         with tf.variable_scope("spike_encoder", reuse=tf.AUTO_REUSE):
-            h_1 = dense(self.input_x, 2 * self.z_dim, activation=tf.nn.relu, name="h_1")
-            h_2 = dense(h_1, self.z_dim, activation=tf.nn.relu, name="h_2")
-            mu = dense(h_2, self.z_dim, name="mu")
-            log_sigma_2 = dense(h_2, self.z_dim, name="log_sigma_2")
-            sigma_2 = tf.exp(log_sigma_2)
-            mu = tf.reshape(mu, shape=[-1, self.z_dim], name="mu")
-            sigma_2 = tf.reshape(sigma_2, shape=[-1, self.z_dim], name="sigma_2")
-            sigma = tf.sqrt(sigma_2, name="sigma")
+            h_1 = Dense(2 * self.z_dim, activation=tf.nn.leaky_relu)(self.input_x)
+            h_1 = Dropout(rate=self.dropout)(h_1)
+            h_1 = BatchNormalization()(h_1)
+            h_2 = Dense(self.z_dim, activation=tf.nn.leaky_relu)(h_1)
+            h_2 = Dropout(rate=self.dropout)(h_2)
+            h_2 = BatchNormalization()(h_2)
+            with tf.name_scope("mu"):
+                mu = Dense(self.z_dim)(h_2)
+                mu = tf.reshape(mu, shape=[-1, self.z_dim])
+            with tf.name_scope("sigma"):
+                log_sigma_2 = Dense(self.z_dim)(h_2)
+                sigma_2 = tf.exp(log_sigma_2)
+                sigma_2 = tf.reshape(sigma_2, shape=[-1, self.z_dim])
+                sigma = tf.sqrt(sigma_2)
             epsilon_1 = tf.random_normal(shape=tf.shape(sigma), name="epsilon1")
             epsilon_2 = tf.random_normal(shape=tf.shape(sigma), name="epsilon2")
-            r_t_1 = sigma * epsilon_1 / 10
-            r_t_2 = mu + sigma * epsilon_2
+            with tf.name_scope("r_t_1"):
+                r_t_1 = sigma * epsilon_1 / 10
+            with tf.name_scope("r_t_1"):
+                r_t_2 = mu + sigma * epsilon_2
         return r_t_1, r_t_2, mu, sigma_2
 
     def bernoulli(self):
         with tf.variable_scope("bernoulli", reuse=tf.AUTO_REUSE):
-            h_1 = dense(self.input_x, 2 * self.z_dim, activation=tf.nn.relu, name="h_1")
-            h_2 = dense(h_1, self.z_dim, activation=tf.nn.sigmoid, name="h_2")
+            h_1 = Dense(2 * self.z_dim, activation=tf.nn.leaky_relu)(self.input_x)
+            h_1 = Dropout(rate=self.dropout)(h_1)
+            h_1 = BatchNormalization()(h_1)
+            h_2 = Dense(self.z_dim, activation=tf.nn.leaky_relu)(h_1)
+            h_2 = Dropout(rate=self.dropout)(h_2)
+            # h_2 = BatchNormalization()(h_2)
             c_t = tf.reshape(h_2, shape=[-1, self.z_dim], name="mu")
-            epsilon = tf.random.uniform(shape=tf.shape(c_t), minval=0, maxval=1,name="epsilon")
-            c_t = tf.nn.sigmoid(tf.log(epsilon + 1e-20) - tf.log(1 - epsilon + 1e-20) + tf.log(c_t) + tf.log(1 - c_t))
+            epsilon = tf.random.uniform(shape=tf.shape(c_t), minval=0, maxval=1, name="epsilon")
+            with tf.name_scope("c_t"):
+                c_t = tf.nn.sigmoid(tf.log(epsilon + 1e-10) - tf.log(1 - epsilon + 1e-10) + tf.log(c_t + 1e-10)
+                                    + tf.log(1 - c_t + 1e-10))
         return c_t
 
     def spike_z(self):
@@ -129,23 +182,24 @@ class VAE():
 
     def decoder_ze(self):
         with tf.variable_scope("decoder_ze", reuse=tf.AUTO_REUSE):
-            h_3 = dense(self.attn, 2*self.z_dim, activation=tf.nn.relu, name="h_3")
-            h_4 = dense(h_3, self.seq_len, name="h_4")
-            x_hat = tf.expand_dims(h_4, 1, name="result")
+            h_1 = Dense(2 * self.z_dim, activation=tf.nn.leaky_relu)(self.attn)
+            h_2 = Dense(self.seq_len)(h_1)
+            x_hat = tf.expand_dims(h_2, 1, name="result")
         return x_hat
 
     def decoder_zq(self):
         with tf.variable_scope("decoder_zq", reuse=tf.AUTO_REUSE):
-            h_3 = dense(self.z_graph, 2*self.z_dim, tf.nn.relu, name="h_3")
-            h_4 = dense(h_3, self.seq_len, name="h_4")
-            x_hat = tf.expand_dims(h_4, 1, name='result')
+            h_1 = Dense(2 * self.z_dim, activation=tf.nn.leaky_relu)(self.z_graph)
+            h_2 = Dense(self.seq_len)(h_1)
+            x_hat = tf.expand_dims(h_2, 1, name='result')
         return x_hat
 
     def decoder_z(self):
         with tf.variable_scope("decoder_z", reuse=tf.AUTO_REUSE):
-            h_3 = dense(self.spike_z, 2*self.z_dim, tf.nn.relu, name="h_3")
-            h_4 = dense(h_3, self.seq_len, name="h_4")
-            x_hat = tf.expand_dims(h_4, 1, name='result')
+            h_1 = Dense(2 * self.z_dim, activation=tf.nn.leaky_relu)(self.spike_z)
+            h_2 = Dense(self.seq_len)(h_1)
+            # h_2 = BatchNormalization()(h_2)
+            x_hat = tf.expand_dims(h_2, 1, name='result')
         return x_hat
 
     def run_lstm_ze(self):
@@ -275,6 +329,36 @@ class VAE():
         tf.summary.scalar("loss_reconstruction", loss_rec_mse)
         return loss_rec_mse
 
+    @lazy_scope
+    def loss_vae(self):
+        with tf.name_scope("loss_vae"):
+            loss_rec_mse_z = tf.reduce_sum(tf.square(self.input_x - self.x_hat), axis=-1)
+            elbo_c = -tf.reduce_sum(-tf.log(2.0) - self.c_t * tf.log(self.c_t + 1e-20) - (1.0 - self.c_t) * tf.log(
+                1.0 - self.c_t + 1e-20), axis=-1)
+            elbo_r1 = -0.5 * tf.reduce_sum(1.0 - 100 * tf.square(self.mu_) - self.sigma_2_ + tf.log(self.sigma_2_),
+                                           axis=-1)
+            elbo_r2 = -0.5 * tf.reduce_sum(1.0 - tf.square(self.mu_) - self.sigma_2_ + tf.log(self.sigma_2_), axis=-1)
+            loss_kl = elbo_c + elbo_r1 + elbo_r2
+            # loss_kl = - 0.5*tf.reduce_sum(1.0-tf.square(self.mu_)-self.sigma_2_+tf.log(self.sigma_2_), axis=-1)
+            vae_loss = tf.reduce_mean(loss_rec_mse_z, name="vae_loss")
+            tf.summary.scalar("loss_vae", vae_loss)
+        return vae_loss
+
+    @lazy_scope
+    def loss_ze(self):
+        with tf.name_scope("loss_ze"):
+            loss_rec_mse_ze = tf.reduce_sum(tf.square(self.input_x - self.x_hat_e))
+            tf.summary.scalar("loss_ze", loss_rec_mse_ze)
+        return loss_rec_mse_ze
+
+    @lazy_scope
+    def loss_zq(self):
+        with tf.name_scope("loss_zq"):
+            loss_rec_mse_zq = tf.reduce_sum(tf.square(self.input_x - self.x_hat_q))
+            tf.summary.scalar("loss_zq", loss_rec_mse_zq)
+        return loss_rec_mse_zq
+
+    @lazy_scope
     def loss_commitment(self):
         with tf.variable_scope("loss_commit"):
             # loss_commit = tf.reduce_mean(tf.squared_difference(self.attn, self.z_graph))
@@ -284,6 +368,7 @@ class VAE():
         tf.summary.scalar("loss_commit", loss_commit)
         return loss_commit
 
+    @lazy_scope
     def loss_graph(self):
         with tf.variable_scope("loss_graph"):
             loss_graph = self.run_lstm_ze()
@@ -292,8 +377,10 @@ class VAE():
 
     def get_loss(self):
         with tf.variable_scope("total_loss"):
-            loss = self.loss_reconstruction() + self.loss_commitment()
-            loss = tf.reduce_mean(loss, name='loss')
+            # loss = self.loss_reconstruction + self.loss_commitment()
+            loss = self.alpha * self.loss_vae + self.beta * self.loss_ze + self.gamma * self.loss_zq +\
+                   self.eta * self.loss_commitment + self.kappa * self.loss_graph
+            # loss = tf.reduce_mean(loss, name='loss')
         tf.summary.scalar("loss", loss)
         return loss
 
@@ -303,8 +390,9 @@ class VAE():
             learning_rate = tf.train.exponential_decay(starter_learning_rate, self.global_step,
                                                        20, 0.9, staircase=True)
             optimizer = tf.train.AdamOptimizer(learning_rate)
-            grads, variables = zip(*optimizer.compute_gradients(self.loss))
-            grads, global_norm = tf.clip_by_global_norm(grads, 5)
-            train_op = optimizer.apply_gradients(zip(grads, variables), global_step=self.global_step)
-            # train_op = optimizer.minimize(self.loss, self.global_step)
-        return train_op
+            # grads, variables = zip(*optimizer.compute_gradients(self.loss))
+            # grads, global_norm = tf.clip_by_global_norm(grads, 5)
+            # train_op = optimizer.apply_gradients(zip(grads, variables), global_step=self.global_step)
+            train_vae = optimizer.minimize(self.loss_reconstruction, self.global_step)
+            train_op = optimizer.minimize(self.loss, self.global_step)
+        return train_vae, train_op

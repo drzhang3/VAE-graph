@@ -12,8 +12,8 @@ tf.reset_default_graph()
 def evaluation(x, y):
     r2 = r2_score(x, y)
     mse = mean_squared_error(x, y)
-    print("The r2 is %f"%r2)
-    print("The mse if %f"%mse)
+    print("The r2 is %f" % r2)
+    print("The mse if %f" % mse)
 
 
 def shuffle_data(x_train):
@@ -48,17 +48,17 @@ def train(model, x_train, epochs, batch_size):
                     print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
                 loss_list.append(np.mean(temp_loss))
 
-            print('training ...')
-            for epoch in range(epochs):
-                temp_loss = []
-                for j in range(batch_num):
-                    _, loss_, train_summaries = sess.run([model.train_op, model.loss, summaries],
-                                    feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
-                    temp_loss.append(loss_)
-                    writer.add_summary(train_summaries, tf.train.global_step(sess, model.global_step))
-                if epoch % 10 == 0:
-                    print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
-                loss_list.append(np.mean(temp_loss))
+            # print('training ...')
+            # for epoch in range(epochs):
+            #     temp_loss = []
+            #     for j in range(batch_num):
+            #         _, loss_, train_summaries = sess.run([model.train_op, model.loss, summaries],
+            #                         feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
+            #         temp_loss.append(loss_)
+            #         writer.add_summary(train_summaries, tf.train.global_step(sess, model.global_step))
+            #     if epoch % 10 == 0:
+            #         print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
+            #     loss_list.append(np.mean(temp_loss))
 
         except KeyboardInterrupt:
             pass
@@ -77,7 +77,7 @@ def test(x_test):
         graph = tf.get_default_graph()
         input_x = graph.get_tensor_by_name("input_x:0")
         # x_hat_e = graph.get_tensor_by_name("decoder_ze/result:0")
-        x_hat_ = graph.get_tensor_by_name("decoder_z/result:0")
+        x_hat_ = graph.get_tensor_by_name("x_hat/result:0")
         # prob_ = graph.get_tensor_by_name("gcn/prob:0")
         # similarity_ = tf.get_collection("similarity")[0]
         # node_state_ = tf.get_collection("node_state")[0]
@@ -198,6 +198,7 @@ gamma = 1
 eta = 1
 kappa = 1
 theta = 1
+is_spike = True
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]
 data2 = [np.sin(np.pi*i*0.02) for i in range(5000)]
 # raw_data = [np.sin(np.pi * i * 0.04) for i in range(5000)]
@@ -210,15 +211,15 @@ raw_data = data1
 #     raw_data.extend(data)
 # raw_data = list(pd.read_csv("latency_15_min.csv").Latency)[1:-1]
 # raw_data = [(i-np.min(raw_data))/(np.max(raw_data)-np.min(raw_data)) for i in raw_data]
-# mask = mask_data(raw_data)
-mask = raw_data
+mask = mask_data(raw_data)
+# mask = raw_data
 x_train, y_train = get_train_data(mask, seq_len, step)
 x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")
 # data = [(i-np.mean(data)/np.std(data)) for i in data]
 print(x_train.shape)
 model = VAE(batch_size=batch_size, z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim,
-            alpha=alpha, beta=beta, gamma=gamma, eta=eta, kappa=kappa, theta=theta)
+            alpha=alpha, beta=beta, gamma=gamma, eta=eta, kappa=kappa, theta=theta, is_spike=is_spike)
 loss = train(model, x_train, epochs, batch_size)
 plt.plot(loss)
 plt.savefig("./fig/loss.png")

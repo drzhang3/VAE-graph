@@ -106,7 +106,7 @@ class VAE():
         # self.z_e, self.mu, self.sigma_2 = self.encoder()
         # self.r_t_1, self.r_t_2, self.mu, self.sigma_2 = self.spike_vae()
         # self.z_graph = self.z_e
-        self.train_vae = self.optimize()
+        self.train_vae, self.train_op = self.optimize()
 
     def global_state(self):
         embeddings = tf.get_variable("embeddings", [self.batch_size, self.batch_size]+[self.z_dim],
@@ -204,13 +204,15 @@ class VAE():
         x_hat = tf.expand_dims(h_2, 1, name='result')
         return x_hat
 
-    def run_lstm_ze(self):
+    @lazy_scope
+    def loss_lstm(self):
         with tf.variable_scope("run_lstm_ze", reuse=tf.AUTO_REUSE):
             z_e_x, z_e_y, num = get_z_e(self.z_e)
             loss = []
             for i in range(num):
                 outputs = self.lstm_vae(z_e_x[i])
-                loss_ = tf.losses.mean_squared_error(outputs, z_e_y[i])
+                # loss_ = tf.losses.mean_squared_error(outputs, z_e_y[i])
+                loss_ = outputs.log_prob(z_e_y[i])
                 loss.append(loss_)
             loss_res = tf.reduce_mean(loss, name="lstm_loss")
         return loss_res
@@ -223,11 +225,11 @@ class VAE():
             outputs, _ = tf.nn.dynamic_rnn(cell, input_lstm, dtype=tf.float32)    # (batch_size, seq_len, z_dim)
             outputs = tf.transpose(outputs, [1, 0, 2])[-1]     # (1 , z_dim)
             outputs = dense(outputs, self.z_dim)     # (1, hidden_dim)
-            next_z_e = Dense(tfp.layers.IndependentNormal.params_size(self.latent_dim),
-                                             activation=None)(h_1)
-            next_z_e = tfp.layers.IndependentNormal(self.latent_dim)(next_z_e)
+            next_z_e = Dense(tfp.layers.IndependentNormal.params_size(self.z_dim),
+                                             activation=None)(outputs)
+            next_z_e = tfp.layers.IndependentNormal(self.z_dim)(next_z_e)
             outputs = tf.reshape(outputs, [self.z_dim])
-        return outputs
+        return next_z_e
 
     @lazy_scope
     def attn(self):
@@ -354,16 +356,10 @@ class VAE():
         return loss_commit
 
     @lazy_scope
-    def loss_graph(self):
-        loss_graph = self.run_lstm_ze()
-        tf.summary.scalar("loss_graph", loss_graph)
-        return loss_graph
-
-    @lazy_scope
     def loss(self):
         # loss = self.loss_reconstruction + self.loss_commitment()
         loss = self.alpha * self.loss_vae + self.beta * self.loss_ze + self.gamma * self.loss_zq +\
-               self.eta * self.loss_commitment + self.kappa * self.loss_graph
+               self.eta * self.loss_commitment + self.theta * self.loss_lstm
         # loss = tf.reduce_mean(loss, name='loss')
         tf.summary.scalar("loss", loss)
         return loss
@@ -378,5 +374,5 @@ class VAE():
             # grads, global_norm = tf.clip_by_global_norm(grads, 5)
             # train_op = optimizer.apply_gradients(zip(grads, variables), global_step=self.global_step)
             train_vae = optimizer.minimize(self.loss_vae, self.global_step)
-            # train_op = optimizer.minimize(self.loss, self.global_step)
-        return train_vae
+            train_op = optimizer.minimize(self.loss, self.global_step)
+        return train_vae, train_op

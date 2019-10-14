@@ -40,7 +40,7 @@ def train(model, x_train, epochs, batch_size):
             for epoch in range(30):
                 temp_loss = []
                 for j in range(batch_num):
-                    _, loss_, train_summaries = sess.run([model.train_vae, model.loss_vae, summaries],
+                    _, loss_, train_summaries = sess.run([model.train_spike, model.loss_test, summaries],
                                     feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
                     temp_loss.append(loss_)
                     writer.add_summary(train_summaries, tf.train.global_step(sess, model.global_step))
@@ -48,17 +48,17 @@ def train(model, x_train, epochs, batch_size):
                     print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
                 loss_list.append(np.mean(temp_loss))
 
-            print('training ...')
-            for epoch in range(epochs):
-                temp_loss = []
-                for j in range(batch_num):
-                    _, loss_, train_summaries = sess.run([model.train_op, model.loss, summaries],
-                                    feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
-                    temp_loss.append(loss_)
-                    writer.add_summary(train_summaries, tf.train.global_step(sess, model.global_step))
-                if epoch % 10 == 0:
-                    print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
-                loss_list.append(np.mean(temp_loss))
+            # print('training ...')
+            # for epoch in range(epochs):
+            #     temp_loss = []
+            #     for j in range(batch_num):
+            #         _, loss_, train_summaries = sess.run([model.train_op, model.loss, summaries],
+            #                         feed_dict={model.input_x: x_train[j * batch_size:(j + 1) * batch_size]})
+            #         temp_loss.append(loss_)
+            #         writer.add_summary(train_summaries, tf.train.global_step(sess, model.global_step))
+            #     if epoch % 10 == 0:
+            #         print('Epoch: ', epoch + 1, '| Loss: ', np.mean(temp_loss))
+            #     loss_list.append(np.mean(temp_loss))
 
         except KeyboardInterrupt:
             pass
@@ -190,7 +190,7 @@ step = 4
 z_dim = 18     # VAE hidden_state size
 hidden_dim = 10     # LSTM cell state size
 epochs = 1000
-batch_size = 32
+batch_size = 256
 decay_factor = 0.9
 alpha = 1
 beta = 1

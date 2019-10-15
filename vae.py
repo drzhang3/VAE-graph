@@ -85,6 +85,7 @@ class VAE():
         self.embedding_size = self.z_dim
         self.keep_prob = 0.9
         self.dropout = 0.5
+        self.memory_size = 64
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
@@ -95,24 +96,22 @@ class VAE():
         self.is_spike = is_spike
         self.input_x = tf.placeholder(shape=[self.batch_size, input_dim, seq_len], dtype=tf.float32, name="input_x")
         self.global_step = tf.Variable(0, trainable=False, name="global_step")
-        # self.batch_size = tf.shape(self.input_x)[0]
-        # self.z_e
-        # self.attn
-        # self.position_embedding
-        # self.z_graph
-        # self.x_hat_e
-        # self.x_hat_q
-        # self.x_hat
-        # self.loss
-        # self.z_e, self.mu, self.sigma_2 = self.encoder()
-        # self.r_t_1, self.r_t_2, self.mu, self.sigma_2 = self.spike_vae()
-        # self.z_graph = self.z_e
-        # self.train_vae, self.train_op, self.train_spike = self.optimize()
-        self.train_spike = self.optimize()
+        self.global_state
+        self.z_e
+        self.attn
+        self.position_embedding
+        self.z_graph
+        self.x_hat_e
+        self.x_hat_q
+        self.x_hat
+        self.loss
+        self.train_vae, self.train_op = self.optimize()
 
+    @lazy_scope
     def global_state(self):
-        embeddings = tf.get_variable("embeddings", [self.batch_size, self.batch_size]+[self.z_dim],
+        embeddings = tf.get_variable("embeddings", [self.memory_size, self.z_dim],
                                      initializer=tf.truncated_normal_initializer(stddev=0.05))
+        similarity = tf.matmul(self.z_e, tf.transpose(embeddings))/tf.norm(embeddings, axis=-1)
         tf.summary.tensor_summary("embeddings", embeddings)
         return embeddings
 
@@ -175,43 +174,43 @@ class VAE():
                             + tf.log(1 - c_t + 1e-10))
         return c_t
 
-    def new_spike_z(self):
-        h_1 = Dense(2 * self.z_dim, activation=tf.nn.leaky_relu)(self.input_x)
-        # h_1 = Dropout(rate=self.dropout)(h_1)
-        # h_1 = BatchNormalization()(h_1)
-        h_2 = Dense(self.z_dim, activation=tf.nn.leaky_relu)(h_1)
-        # h_2 = Dropout(rate=self.dropout)(h_2)
-        # h_2 = BatchNormalization()(h_2)
-        with tf.name_scope("mu"):
-            mu = Dense(self.z_dim)(h_2)
-            mu = tf.reshape(mu, shape=[-1, self.z_dim])
-        with tf.name_scope("sigma"):
-            log_sigma_2 = Dense(self.z_dim)(h_2)
-            sigma_2 = tf.exp(log_sigma_2)
-            sigma_2 = tf.reshape(sigma_2, shape=[-1, self.z_dim])
-            sigma = tf.sqrt(sigma_2)
-        with tf.name_scope("spike"):
-            log_spike = Dense(self.z_dim, activation=tf.nn.relu)(h_2)
-            spike = tf.exp(log_spike)
-        epsilon1 = tf.random_normal(shape=tf.shape(sigma), name="epsilon")
-        epsilon2 = tf.random_normal(shape=tf.shape(sigma), name="epsilon")
-        with tf.name_scope("z"):
-            z = mu + sigma * epsilon1
-        with tf.name_scope("select"):
-            s = tf.nn.sigmoid(50*(epsilon2 + spike -1))
-        return tf.multiply(z, s), mu, log_sigma_2, log_spike
-
-    @lazy_scope
-    def loss_test(self):
-        self.new_spike_z, mu, log_sigma_2, log_spike = self.new_spike_z()
-        spike = tf.clip_by_value(tf.exp(log_spike), 1e-10, 1.0 - 1e-10)
-        kl_loss = -0.5*tf.reduce_sum(spike * (1+log_sigma_2-tf.square(mu)-tf.exp(log_sigma_2)), axis=-1) +\
-            tf.reduce_sum((1-spike)*tf.log((1-spike)/(1-self.a)) +\
-            spike*tf.log(spike/self.a), axis=-1)
-        self.x_hat = self.x_hat()
-        loss_rec_mse_z = tf.reduce_sum(tf.square(self.input_x - self.x_hat), axis=-1)
-        loss = tf.reduce_mean(kl_loss + loss_rec_mse_z)
-        return loss
+    # def new_spike_z(self):
+    #     h_1 = Dense(2 * self.z_dim, activation=tf.nn.leaky_relu)(self.input_x)
+    #     # h_1 = Dropout(rate=self.dropout)(h_1)
+    #     # h_1 = BatchNormalization()(h_1)
+    #     h_2 = Dense(self.z_dim, activation=tf.nn.leaky_relu)(h_1)
+    #     # h_2 = Dropout(rate=self.dropout)(h_2)
+    #     # h_2 = BatchNormalization()(h_2)
+    #     with tf.name_scope("mu"):
+    #         mu = Dense(self.z_dim)(h_2)
+    #         mu = tf.reshape(mu, shape=[-1, self.z_dim])
+    #     with tf.name_scope("sigma"):
+    #         log_sigma_2 = Dense(self.z_dim)(h_2)
+    #         sigma_2 = tf.exp(log_sigma_2)
+    #         sigma_2 = tf.reshape(sigma_2, shape=[-1, self.z_dim])
+    #         sigma = tf.sqrt(sigma_2)
+    #     with tf.name_scope("spike"):
+    #         log_spike = Dense(self.z_dim, activation=tf.nn.relu)(h_2)
+    #         spike = tf.exp(log_spike)
+    #     epsilon1 = tf.random_normal(shape=tf.shape(sigma), name="epsilon")
+    #     epsilon2 = tf.random_normal(shape=tf.shape(sigma), name="epsilon")
+    #     with tf.name_scope("z"):
+    #         z = mu + sigma * epsilon1
+    #     with tf.name_scope("select"):
+    #         s = tf.nn.sigmoid(50*(epsilon2 + spike -1))
+    #     return tf.multiply(z, s), mu, log_sigma_2, log_spike
+    #
+    # @lazy_scope
+    # def loss_test(self):
+    #     self.new_spike_z, mu, log_sigma_2, log_spike = self.new_spike_z()
+    #     spike = tf.clip_by_value(tf.exp(log_spike), 1e-10, 1.0 - 1e-10)
+    #     kl_loss = -0.5*tf.reduce_sum(spike * (1+log_sigma_2-tf.square(mu)-tf.exp(log_sigma_2)), axis=-1) +\
+    #         tf.reduce_sum((1-spike)*tf.log((1-spike)/(1-self.a)) +\
+    #         spike*tf.log(spike/self.a), axis=-1)
+    #     self.x_hat = self.x_hat()
+    #     loss_rec_mse_z = tf.reduce_sum(tf.square(self.input_x - self.x_hat), axis=-1)
+    #     loss = tf.reduce_mean(kl_loss + loss_rec_mse_z)
+    #     return loss
 
 
     @lazy_scope
@@ -237,8 +236,9 @@ class VAE():
         x_hat = tf.expand_dims(h_2, 1, name='result')
         return x_hat
 
+    @lazy_scope
     def x_hat(self):
-        h_1 = Dense(2 * self.z_dim, activation=tf.nn.leaky_relu)(self.new_spike_z)
+        h_1 = Dense(2 * self.z_dim, activation=tf.nn.leaky_relu)(self.z_e)
         h_2 = Dense(self.seq_len)(h_1)
         # h_2 = BatchNormalization()(h_2)
         x_hat = tf.expand_dims(h_2, 1, name='result')
@@ -247,28 +247,30 @@ class VAE():
     @lazy_scope
     def loss_lstm(self):
         with tf.variable_scope("run_lstm_ze", reuse=tf.AUTO_REUSE):
-            z_e_x, z_e_y, num = get_z_e(self.z_e)
+            z_e_x, z_e_y, num = get_z_e(self.z_e)   # (num, bs, z_dim)
             loss = []
-            for i in range(num):
-                outputs = self.lstm_vae(z_e_x[i])
-                # loss_ = tf.losses.mean_squared_error(outputs, z_e_y[i])
-                loss_ = outputs.log_prob(z_e_y[i])
-                loss.append(loss_)
+            outputs = self.lstm_vae(z_e_x)
+            # loss_ = tf.losses.mean_squared_error(outputs, z_e_y[i])
+            loss_ = outputs.log_prob(z_e_y)
+            loss.append(loss_)
             loss_res = tf.reduce_mean(loss, name="lstm_loss")
         return loss_res
 
-    def lstm_vae(self, x_data):
+    def lstm_vae(self, data):
         with tf.variable_scope('lstm_vae', reuse=tf.AUTO_REUSE):
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_dim)
-            input_lstm = tf.expand_dims(x_data, 0, name="input_lstm")
+            input_lstm = tf.stack(data, axis=0)
+            print(np.shape(input_lstm))
+            # input_lstm = tf.expand_dims(x_data, 1, name="input_lstm")
             # cell = tf.contrib.rnn.AttentionCellWrapper(cell, attn_length = self.attention_len)
+            print("okkk")
             outputs, _ = tf.nn.dynamic_rnn(cell, input_lstm, dtype=tf.float32)    # (batch_size, seq_len, z_dim)
             outputs = tf.transpose(outputs, [1, 0, 2])[-1]     # (1 , z_dim)
             outputs = dense(outputs, self.z_dim)     # (1, hidden_dim)
             next_z_e = Dense(tfp.layers.IndependentNormal.params_size(self.z_dim),
                                              activation=None)(outputs)
             next_z_e = tfp.layers.IndependentNormal(self.z_dim)(next_z_e)
-            outputs = tf.reshape(outputs, [self.z_dim])
+            # outputs = tf.reshape(outputs, [self.z_dim])
         return next_z_e
 
     @lazy_scope
@@ -415,6 +417,6 @@ class VAE():
             # train_op = optimizer.apply_gradients(zip(grads, variables), global_step=self.global_step)
             train_vae = optimizer.minimize(self.loss_vae, self.global_step)
             train_op = optimizer.minimize(self.loss, self.global_step)
-            train_spike = optimizer.minimize(self.loss_test, self.global_step)
-        # return train_vae, train_op, train_spike
-        return train_spike
+            # train_spike = optimizer.minimize(self.loss_test, self.global_step)
+        return train_vae, train_op
+        # return train_spike

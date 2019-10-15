@@ -98,6 +98,8 @@ class VAE():
         self.global_step = tf.Variable(0, trainable=False, name="global_step")
         self.global_state
         self.z_e
+        self.similarity
+        self.k
         self.attn
         self.position_embedding
         self.z_graph
@@ -111,9 +113,18 @@ class VAE():
     def global_state(self):
         embeddings = tf.get_variable("embeddings", [self.memory_size, self.z_dim],
                                      initializer=tf.truncated_normal_initializer(stddev=0.05))
-        similarity = tf.matmul(self.z_e, tf.transpose(embeddings))/tf.norm(embeddings, axis=-1)
         tf.summary.tensor_summary("embeddings", embeddings)
         return embeddings
+
+    @lazy_scope
+    def similarity(self):
+        similar = tf.matmul(self.z_e, tf.transpose(self.global_state)) / tf.norm(self.global_state) / tf.norm(self.z_e)
+        return similar
+
+    @lazy_scope
+    def k(self):
+        k = tf.argmax(self.similarity, axis=-1)
+        return k
 
     @lazy_scope
     def encoder(self):

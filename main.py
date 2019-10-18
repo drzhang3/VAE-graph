@@ -90,12 +90,13 @@ def test(x_test):
         input_x = graph.get_tensor_by_name("input_x:0")
         # x_hat_e = graph.get_tensor_by_name("decoder_ze/result:0")
         x_hat_ = graph.get_tensor_by_name("x_hat/result:0")
+        k_ = graph.get_tensor_by_name("k/index:0")
         # prob_ = graph.get_tensor_by_name("gcn/prob:0")
         # similarity_ = tf.get_collection("similarity")[0]
         # node_state_ = tf.get_collection("node_state")[0]
         # multi_head_ = tf.get_collection("multi-head")[0]
         # position_ = tf.get_collection("position")[0]
-        #z_e_ = tf.get_collection("z_e")[0]
+        # z_e_ = tf.get_collection("z_e")[0]
         # similarity = graph.get_tensor_by_name("similarity:0")
         print("variable is ready")
 
@@ -164,6 +165,14 @@ def test(x_test):
             if i == 0:
                 break
 
+        index = []
+        for i in range(batch_num):
+            k = sess.run(k_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
+            # print(np.shape(x_test[0:1][0,0,:]))
+            index.extend(k)
+            plt.plot(index)
+            plt.show()
+
         # probs = []
         # for i in range(batch_num//batch_size):
         #     prob = sess.run(prob_, feed_dict={input_x: x_test[i * batch_size:(i + 1) * batch_size]})
@@ -210,7 +219,7 @@ gamma = 1
 eta = 1
 kappa = 0
 theta = 1
-is_spike = True
+is_spike = False
 data1 = [np.sin(np.pi*i*0.04) for i in range(5000)]
 data2 = [np.sin(np.pi*i*0.02) for i in range(5000)]
 # raw_data = [np.sin(np.pi * i * 0.04) for i in range(5000)]
@@ -230,10 +239,10 @@ x_train = np.reshape(x_train, [x_train.shape[0], 1, x_train.shape[1]])
 print("ok")
 # data = [(i-np.mean(data)/np.std(data)) for i in data]
 print(x_train.shape)
-model = VAE(batch_size=batch_size, z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim,
-            alpha=alpha, beta=beta, gamma=gamma, eta=eta, kappa=kappa, theta=theta, is_spike=is_spike)
-loss = train(model, x_train, epochs, batch_size)
-plt.plot(loss)
-plt.savefig("./fig/loss.png")
-plt.show()
+# model = VAE(batch_size=batch_size, z_dim=z_dim, seq_len=seq_len, input_dim=1, hidden_dim=hidden_dim,
+#             alpha=alpha, beta=beta, gamma=gamma, eta=eta, kappa=kappa, theta=theta, is_spike=is_spike)
+# loss = train(model, x_train, epochs, batch_size)
+# plt.plot(loss)
+# plt.savefig("./fig/loss.png")
+# plt.show()
 test(x_train)

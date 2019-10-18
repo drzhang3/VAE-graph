@@ -74,7 +74,7 @@ def compute_ts_complexity(ts):
     return cid_ce(ts)
 
 
-class VAE():
+class VAE:
     def __init__(self, batch_size, z_dim, seq_len, input_dim, hidden_dim, alpha, beta, gamma, eta, kappa, theta, is_spike):
         self.batch_size = batch_size
         self.z_dim = z_dim
@@ -123,7 +123,7 @@ class VAE():
 
     @lazy_scope
     def k(self):
-        k = tf.argmax(self.similarity, axis=-1)
+        k = tf.argmax(self.similarity, axis=-1, name="index")
         return k
 
     @lazy_scope

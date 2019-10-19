@@ -1,7 +1,33 @@
 import tensorflow as tf
 import tensorflow_probability as tfp
 import logging
+import functools
 
+
+def lazy_scope(function):
+    """Creates a decorator for methods that makes their return values load lazily.
+
+    A method with this decorator will only compute the return value once when called
+    for the first time. Afterwards, the value will be cached as an object attribute.
+    Inspired by: https://danijar.com/structuring-your-tensorflow-models
+
+    Args:
+        function (func): Function to be decorated.
+
+    Returns:
+        decorator: Decorator for the function.
+    """
+    attribute = "_cache_" + function.__name__
+
+    @property
+    @functools.wraps(function)
+    def decorator(self):
+        if not hasattr(self, attribute):
+            with tf.variable_scope(function.__name__):
+                setattr(self, attribute, function(self))
+        return getattr(self, attribute)
+
+    return decorator
 
 # TODO : add necessary code
 def wrap_params_net(inputs, h_for_dist, mean_layer, std_layer):
@@ -105,11 +131,10 @@ class RecurrentDistribution:
                                                                                               1e8))
         return log_prob_n
 
-    def __init__(self, input_q, mean_q_mlp, std_q_mlp, z_dim, window_length=100, is_reparameterized=True,
+    def __init__(self, input_q, mean_q_mlp, std_q_mlp, z_dim, window_length, is_reparameterized=True,
                  check_numerics=True):
-        super(RecurrentDistribution, self).__init__()
-        self.normal = tfp.distributions.normal(mean=tf.zeros([window_length, z_dim]),
-                                               std=tf.ones([window_length, z_dim]))
+        self.normal = tfp.distributions.MultivariateNormalDiag(loc=tf.zeros([window_length, z_dim]),
+                                                          scale_diag=tf.ones([window_length, z_dim]))
         self.std_q_mlp = std_q_mlp
         self.mean_q_mlp = mean_q_mlp
         self._check_numerics = check_numerics
@@ -121,17 +146,9 @@ class RecurrentDistribution:
         self.window_length = window_length
         self.time_first_shape = tf.convert_to_tensor([self.window_length, tf.shape(input_q)[0], self.z_dim])
 
-    def sample(self, n_samples=1024, is_reparameterized=None, group_ndims=0, compute_density=False,
-               name=None):
-
-        from tfsnippet.stochastic import StochasticTensor
-        if n_samples is None:
-            n_samples = 1
-            n_samples_is_none = True
-        else:
-            n_samples_is_none = False
+    def sample(self, n_samples=1, name=None):
         with tf.name_scope(name=name, default_name='sample'):
-            noise = self.normal.sample(n_samples=n_samples)
+            noise = self.normal.sample(n_samples)
 
             noise = tf.transpose(noise, [1, 0, 2])  # window_length * n_samples * z_dim
             noise = tf.truncated_normal(tf.shape(noise))
@@ -147,27 +164,7 @@ class RecurrentDistribution:
                               )[0]  # time_step * n_samples * batch_size * z_dim
 
             samples = tf.transpose(samples, [1, 2, 0, 3])  # n_samples * batch_size * time_step *  z_dim
-
-            if n_samples_is_none:
-                t = StochasticTensor(
-                    distribution=self,
-                    tensor=tf.reduce_mean(samples, axis=0),
-                    n_samples=1,
-                    group_ndims=group_ndims,
-                    is_reparameterized=self.is_reparameterized
-                )
-            else:
-                t = StochasticTensor(
-                    distribution=self,
-                    tensor=samples,
-                    n_samples=n_samples,
-                    group_ndims=group_ndims,
-                    is_reparameterized=self.is_reparameterized
-                )
-            if compute_density:
-                with tf.name_scope('compute_prob_and_log_prob'):
-                    log_p = t.log_prob()
-                    t._self_prob = tf.exp(log_p)
+            t = tf.reduce_mean(samples, axis=0)
             return t
 
     def log_prob(self, given, group_ndims=0, name=None):

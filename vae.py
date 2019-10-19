@@ -4,32 +4,7 @@ from tensorflow.python.layers.core import dense
 from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
 import tensorflow_probability as tfp
 import numpy as np
-
-
-def lazy_scope(function):
-    """Creates a decorator for methods that makes their return values load lazily.
-
-    A method with this decorator will only compute the return value once when called
-    for the first time. Afterwards, the value will be cached as an object attribute.
-    Inspired by: https://danijar.com/structuring-your-tensorflow-models
-
-    Args:
-        function (func): Function to be decorated.
-
-    Returns:
-        decorator: Decorator for the function.
-    """
-    attribute = "_cache_" + function.__name__
-
-    @property
-    @functools.wraps(function)
-    def decorator(self):
-        if not hasattr(self, attribute):
-            with tf.variable_scope(function.__name__):
-                setattr(self, attribute, function(self))
-        return getattr(self, attribute)
-
-    return decorator
+from utils import lazy_scope
 
 
 def compute_similarity(node1, node2):

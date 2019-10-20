@@ -72,12 +72,13 @@ class OmniAnomaly:
             p_x_given_z = tfp.distributions.MultivariateNormalDiag(loc=mean,scale_diag=std)
         return p_x_given_z
 
+
     @lazy_scope
     def loss(self):
         loss_recon = tf.reduce_sum(self.decoder.log_prob(self.input_x), axis=-1)
         kl_loss = tf.reduce_mean(self.q_z_given_x.kl_divergence(self.p_z),axis=-1)
-        loss = tf.recude_mean(loss_recon, kl_loss)
-        return loss
+        # loss = tf.recude_mean(loss_recon, kl_loss)
+        return loss_recon
 
 
 

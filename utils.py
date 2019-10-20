@@ -29,6 +29,7 @@ def lazy_scope(function):
 
     return decorator
 
+
 # TODO : add necessary code
 def wrap_params_net(inputs, h_for_dist, mean_layer, std_layer):
     with tf.variable_scope('hidden', reuse=tf.AUTO_REUSE):
@@ -45,6 +46,7 @@ def wrap_params_net_srnn(inputs, h_for_dist):
     return {
         'input_q': h
     }
+
 
 def rnn(x,
         window_length,
@@ -139,6 +141,7 @@ class RecurrentDistribution:
         self.mean_q_mlp = mean_q_mlp
         self._check_numerics = check_numerics
         self.input_q = tf.transpose(input_q, [1, 0, 2])
+        # (window_length, batch_size, dense_dim)
         self._dtype = input_q.dtype
         self._is_reparameterized = is_reparameterized
         self._is_continuous = True
@@ -154,7 +157,8 @@ class RecurrentDistribution:
             noise = tf.truncated_normal(tf.shape(noise))
 
             time_indices_shape = tf.convert_to_tensor([n_samples, tf.shape(self.input_q)[1], self.z_dim])
-
+            # shape = (3,)
+            # tf.zeros(time_indices_shape)    shape=(n_samples, batch_size, z_dim)
             samples = tf.scan(fn=self.sample_step,
                               elems=(noise, self.input_q),
                               initializer=(tf.zeros(time_indices_shape),
